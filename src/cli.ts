@@ -12,7 +12,6 @@ import {
 import { readBunLock } from "./read-bun-lock"
 
 const commandName = "bunlock-dedupe"
-const removedSubcommands = new Set(["dedupe", "duplicates", "dupes"])
 
 function printUsage(): void {
   console.log(`${commandName} [path] [--fix]`)
@@ -66,10 +65,6 @@ function run(): void {
   }
 
   const bunLockPath = positionals[0]
-
-  if (bunLockPath && removedSubcommands.has(bunLockPath)) {
-    fail(`subcommands were removed; use ${commandName} [path] [--fix]`)
-  }
 
   const { path: lockPath, content: lockText } = readBunLock(bunLockPath)
 
