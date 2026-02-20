@@ -1,6 +1,6 @@
 # bunlock-dedupe
 
-`bunlock-dedupe` is a tool for analyzing and deduplicating `bun.lock` sub-dependencies.
+`bunlock-dedupe` finds and fixes duplicate package versions in your `bun.lock` file.
 
 > Disclaimer: this project is partly vibe coded. The logic may contain mistakes, so review results before relying on them.
 
@@ -8,15 +8,15 @@ Related Bun issue: [Deduplicate / dedupe command for bun install #1343](https://
 
 ## Usage
 
-Run in the project directory that contains a `bun.lock` file:
+Run in any directory with a `bun.lock` file:
 
 ```bash
-bunx bunlock-dedupe
-bunx bunlock-dedupe --fixable
-bunx bunlock-dedupe --fix
+bunx bunlock-dedupe          # show all duplicates
+bunx bunlock-dedupe --fixable  # show only fixable duplicates
+bunx bunlock-dedupe --fix    # rewrite the lockfile
 ```
 
-You can pass a custom lockfile path (or a project directory) as an optional argument:
+Or pass a path to a lockfile or project directory:
 
 ```bash
 bunx bunlock-dedupe /path/to/bun.lock
@@ -24,36 +24,16 @@ bunx bunlock-dedupe /path/to/bun.lock --fixable
 bunx bunlock-dedupe /path/to/bun.lock --fix
 ```
 
-## Default behavior
+## What each mode does
 
-`bunlock-dedupe` parses `bun.lock` in the current directory and reports duplicate
-libraries (the same package name resolved in multiple versions).
+**No flags** — scans the lockfile and lists every package that appears in more than one version. For each, it shows the package name, the versions found, and the full dependency path that pulled in each version (so you can see which package required what).
 
-For each duplicate group, it prints:
+**`--fixable`** — same scan, but only shows packages where deduplication is actually possible. Marks the version that would be kept (`✅`) and the versions that can be upgraded to it (`⬆️`).
 
-- package name
-- each resolved version
-- full dependency path from root package name to the requester, with the requester range
+**`--fix`** — rewrites the lockfile, upgrading every dedupe-compatible version to the highest version that all their semver ranges allow.
 
-With `--fixable`, it only prints:
+## How deduplication works
 
-- packages that have at least one dedupe-compatible version
-- target versions (`✅`) and dedupe-compatible versions (`⬆️`)
+Bun sometimes resolves the same package at multiple versions because different packages declare different version ranges — even ranges that could be satisfied by the same version.
 
-## What `--fix` does
-
-`bunlock-dedupe --fix` reads `bun.lock`, analyzes duplicate package versions, and rewrites
-dedupe-compatible entries to a selected target version.
-
-It targets cases where semver ranges allow upgrading a lower resolved sub-dependency
-to an already present higher version.
-
-## Example
-
-Two ranges can resolve to the same version:
-
-- `^3.17.0`
-- `^3.15.2`
-
-If both can be satisfied by `3.17.0`, `bunlock-dedupe --fix` rewrites lockfile entries
-to use that target resolution.
+For example, if package A requires `^3.15.2` and package B requires `^3.17.0`, both ranges are compatible with `3.17.0`. `--fix` upgrades the `^3.15.2` entry to `3.17.0`, removing the duplicate.
