@@ -162,6 +162,7 @@ function renderPackagesPropertyLines(
   key: string,
   value: Record<string, unknown>,
   indentLevel: number,
+  trailingComma: boolean,
 ): string[] {
   const indent = " ".repeat(indentLevel)
   const entryIndent = " ".repeat(indentLevel + 2)
@@ -179,7 +180,7 @@ function renderPackagesPropertyLines(
     }
   }
 
-  lines.push(`${indent}},`)
+  lines.push(`${indent}}${trailingComma ? "," : ""}`)
   return lines
 }
 
@@ -197,9 +198,18 @@ function renderObjectLines(
   }
 
   const lines = [`${indent}{`]
-  for (const [key, item] of entries) {
+  for (const [index, [key, item]] of entries.entries()) {
+    const trailingComma = index < entries.length - 1
+
     if (allowPackagesFormatting && key === "packages" && isRecord(item)) {
-      lines.push(...renderPackagesPropertyLines(key, item, indentLevel + 2))
+      lines.push(
+        ...renderPackagesPropertyLines(
+          key,
+          item,
+          indentLevel + 2,
+          trailingComma,
+        ),
+      )
       continue
     }
 

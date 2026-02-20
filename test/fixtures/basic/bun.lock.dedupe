@@ -19,5 +19,5 @@
     "demo-lib": ["demo-lib@3.17.4", "", {}, "sha"],
 
     "app-cannot/demo-lib": ["demo-lib@3.16.1", "", {}, "sha"],
-  },
+  }
 }

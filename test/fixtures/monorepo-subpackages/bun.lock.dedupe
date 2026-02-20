@@ -28,5 +28,5 @@
     "shared-lib": ["shared-lib@1.5.2", "", {}, "sha"],
 
     "@mono/app3/shared-lib": ["shared-lib@1.4.3", "", {}, "sha"],
-  },
+  }
 }
