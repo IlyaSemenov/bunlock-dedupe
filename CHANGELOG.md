@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.1.1
+
+### Patch Changes
+
+- c1f7cb3: Remove orphaned nested `bun.lock` entries after dedupe.
+
 ## 1.1.0
 
 ### Minor Changes
