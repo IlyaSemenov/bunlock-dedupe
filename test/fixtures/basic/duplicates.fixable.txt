@@ -1,0 +1,5 @@
+demo-lib
+  ✅ 3.17.4
+    - example: ^3.17.0
+  ⬆️ 3.16.8 → 3.17.4
+    - example > app-can: ^3.15.2

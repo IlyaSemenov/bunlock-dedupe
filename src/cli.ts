@@ -14,9 +14,10 @@ import { readBunLock } from "./read-bun-lock"
 const commandName = "bunlock-dedupe"
 
 function printUsage(): void {
-  console.log(`${commandName} [path] [--fix]`)
+  console.log(`${commandName} [path] [--fixable | --fix]`)
   console.log("")
-  console.log("Analyze duplicate bun.lock sub-dependencies by default.")
+  console.log("Analyze duplicate bun.lock sub-dependencies.")
+  console.log("Use --fixable to show only fixable packages and versions.")
   console.log("Use --fix to rewrite dedupe-compatible entries.")
 }
 
@@ -27,7 +28,7 @@ function fail(message: string): never {
 }
 
 function run(): void {
-  let values: { fix: boolean; help: boolean }
+  let values: { fix: boolean; fixable: boolean; help: boolean }
   let positionals: string[]
 
   try {
@@ -39,6 +40,10 @@ function run(): void {
         fix: {
           type: "boolean",
           short: "f",
+          default: false,
+        },
+        fixable: {
+          type: "boolean",
           default: false,
         },
         help: {
@@ -71,7 +76,11 @@ function run(): void {
   if (!values.fix) {
     const parsedLock = parseBunLock(lockText)
     const duplicateGroups = analyzeDuplicatePackages(parsedLock)
-    console.log(formatDuplicatesReport(duplicateGroups))
+    console.log(
+      formatDuplicatesReport(duplicateGroups, {
+        fixableOnly: values.fixable,
+      }),
+    )
     return
   }
 

@@ -10,6 +10,7 @@ Run in the project directory that contains a `bun.lock` file:
 
 ```bash
 bunx bunlock-dedupe
+bunx bunlock-dedupe --fixable
 bunx bunlock-dedupe --fix
 ```
 
@@ -17,6 +18,7 @@ You can pass a custom lockfile path (or a project directory) as an optional argu
 
 ```bash
 bunx bunlock-dedupe /path/to/bun.lock
+bunx bunlock-dedupe /path/to/bun.lock --fixable
 bunx bunlock-dedupe /path/to/bun.lock --fix
 ```
 
@@ -30,6 +32,11 @@ For each duplicate group, it prints:
 - package name
 - each resolved version
 - full dependency path from root package name to the requester, with the requester range
+
+With `--fixable`, it only prints:
+
+- packages that have at least one dedupe-compatible version
+- target versions (`✅`) and dedupe-compatible versions (`⬆️`)
 
 ## What `--fix` does
 
