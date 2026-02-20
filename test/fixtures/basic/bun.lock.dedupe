@@ -16,8 +16,8 @@
 
     "app-cannot": ["app-cannot@1.0.0", "", { "dependencies": { "demo-lib": "~3.16.0" } }, "sha"],
 
-    "app-cannot/demo-lib": ["demo-lib@3.16.1", "", {}, "sha"],
-
     "demo-lib": ["demo-lib@3.17.4", "", {}, "sha"],
+
+    "app-cannot/demo-lib": ["demo-lib@3.16.1", "", {}, "sha"],
   },
 }

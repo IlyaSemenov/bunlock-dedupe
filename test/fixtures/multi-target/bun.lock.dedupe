@@ -19,9 +19,9 @@
 
     "group-b": ["group-b@1.0.0", "", { "dependencies": { "demo-lib": "^2.0.2" } }, "sha"],
 
-    "group-b/demo-lib": ["demo-lib@2.0.2", "", {}, "sha"],
-
     "group-c": ["group-c@1.0.0", "", { "dependencies": { "demo-lib": "^2.0.1" } }, "sha"],
+
+    "group-b/demo-lib": ["demo-lib@2.0.2", "", {}, "sha"],
 
     "group-c/demo-lib": ["demo-lib@2.0.2", "", {}, "sha"],
   },

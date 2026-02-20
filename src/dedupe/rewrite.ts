@@ -5,7 +5,7 @@ import type {
   BunPackageEntry,
   DuplicatePackageInfo,
 } from "./types"
-import { compareStrings } from "./utils"
+import { compareLockKeysByNesting } from "./utils"
 
 type RewriteByPackage = Map<string, Map<string, string>>
 type TemplatesByPackage = Map<string, Map<string, BunPackageEntry>>
@@ -168,7 +168,7 @@ function renderPackagesPropertyLines(
   const lines = [`${indent}${JSON.stringify(key)}: {`]
   const packageEntries = Object.entries(value)
     .filter(([, packageEntry]) => packageEntry !== undefined)
-    .sort(([left], [right]) => compareStrings(left, right))
+    .sort(([left], [right]) => compareLockKeysByNesting(left, right))
 
   for (const [index, [lockKey, packageEntry]] of packageEntries.entries()) {
     lines.push(
