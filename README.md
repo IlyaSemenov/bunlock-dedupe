@@ -1,6 +1,6 @@
-# bunlock
+# bunlock-dedupe
 
-`bunlock` is a tool for analyzing and deduplicating `bun.lock` sub-dependencies.
+`bunlock-dedupe` is a tool for analyzing and deduplicating `bun.lock` sub-dependencies.
 
 > Disclaimer: this project is partly vibe coded. The logic may contain mistakes, so review results before relying on them.
 
@@ -9,22 +9,20 @@
 Run in the project directory that contains a `bun.lock` file:
 
 ```bash
-bunx bunlock duplicates
-bunx bunlock dedupe
+bunx bunlock-dedupe
+bunx bunlock-dedupe --fix
 ```
-
-`dupes` is available as a short alias for `duplicates`.
 
 You can pass a custom lockfile path (or a project directory) as an optional argument:
 
 ```bash
-bunx bunlock duplicates /path/to/bun.lock
-bunx bunlock dedupe /path/to/bun.lock
+bunx bunlock-dedupe /path/to/bun.lock
+bunx bunlock-dedupe /path/to/bun.lock --fix
 ```
 
-## What `duplicates` does
+## Default behavior
 
-`bunlock duplicates` parses `bun.lock` in the current directory and reports duplicate
+`bunlock-dedupe` parses `bun.lock` in the current directory and reports duplicate
 libraries (the same package name resolved in multiple versions).
 
 For each duplicate group, it prints:
@@ -33,9 +31,9 @@ For each duplicate group, it prints:
 - each resolved version
 - full dependency path from root package name to the requester, with the requester range
 
-## What `dedupe` does
+## What `--fix` does
 
-`bunlock dedupe` reads `bun.lock`, analyzes duplicate package versions, and rewrites
+`bunlock-dedupe --fix` reads `bun.lock`, analyzes duplicate package versions, and rewrites
 dedupe-compatible entries to a selected target version.
 
 It targets cases where semver ranges allow upgrading a lower resolved sub-dependency
@@ -48,5 +46,5 @@ Two ranges can resolve to the same version:
 - `^3.17.0`
 - `^3.15.2`
 
-If both can be satisfied by `3.17.0`, `bunlock dedupe` rewrites lockfile entries
+If both can be satisfied by `3.17.0`, `bunlock-dedupe --fix` rewrites lockfile entries
 to use that target resolution.

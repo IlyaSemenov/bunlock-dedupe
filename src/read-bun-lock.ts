@@ -1,10 +1,6 @@
 import { readFileSync, statSync } from "node:fs"
 import path from "node:path"
 
-export type BunLockOptions = {
-  bunLockPath?: string
-}
-
 export type BunLockReadResult = {
   path: string
   content: string
@@ -12,8 +8,8 @@ export type BunLockReadResult = {
 
 const defaultLockFilename = "bun.lock"
 
-function resolveBunLockPath(options: BunLockOptions = {}): string {
-  const p = options.bunLockPath ?? defaultLockFilename
+function resolveBunLockPath(bunLockPath?: string): string {
+  const p = bunLockPath ?? defaultLockFilename
   try {
     if (statSync(p).isDirectory()) {
       return path.join(p, defaultLockFilename)
@@ -24,8 +20,8 @@ function resolveBunLockPath(options: BunLockOptions = {}): string {
   return p
 }
 
-export function readBunLock(options: BunLockOptions = {}): BunLockReadResult {
-  const lockPath = resolveBunLockPath(options)
+export function readBunLock(bunLockPath?: string): BunLockReadResult {
+  const lockPath = resolveBunLockPath(bunLockPath)
   try {
     return {
       path: lockPath,
