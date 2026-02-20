@@ -11,9 +11,9 @@ Related Bun issue: [Deduplicate / dedupe command for bun install #1343](https://
 Run in any directory with a `bun.lock` file:
 
 ```bash
-bunx bunlock-dedupe          # show all duplicates
+bunx bunlock-dedupe            # show all duplicates
 bunx bunlock-dedupe --fixable  # show only fixable duplicates
-bunx bunlock-dedupe --fix    # rewrite the lockfile
+bunx bunlock-dedupe --fix      # rewrite the lockfile
 ```
 
 Or pass a path to a lockfile or project directory:
