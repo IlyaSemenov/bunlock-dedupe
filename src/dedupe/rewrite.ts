@@ -84,7 +84,8 @@ function rewriteEntries(
   const touchedPackageNames = new Set<string>()
   let touchedEntries = 0
 
-  for (const [lockKey, entry] of Object.entries(packages)) {
+  for (const lockKey of Object.keys(packages)) {
+    const entry = packages[lockKey]
     if (!Array.isArray(entry) || typeof entry[0] !== "string") {
       continue
     }
@@ -108,8 +109,13 @@ function rewriteEntries(
       lockKey !== parsed.name &&
       rootVersions.get(parsed.name) === targetVersion
     ) {
-      delete packages[lockKey]
-      touchedEntries += 1
+      const prefix = `${lockKey}/`
+      for (const candidateKey of Object.keys(packages)) {
+        if (candidateKey === lockKey || candidateKey.startsWith(prefix)) {
+          delete packages[candidateKey]
+          touchedEntries += 1
+        }
+      }
       touchedPackageNames.add(parsed.name)
       continue
     }

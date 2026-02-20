@@ -1,0 +1,5 @@
+@types/node
+  ✅ 24.10.13
+    - example: ^24.10.13
+  ⬆️ 20.18.0 → 24.10.13
+    - example > bun-types: *
