@@ -4,6 +4,8 @@
 
 > Disclaimer: this project is partly vibe coded. The logic may contain mistakes, so review results before relying on them.
 
+Related Bun issue: [Deduplicate / dedupe command for bun install #1343](https://github.com/oven-sh/bun/issues/1343)
+
 ## Usage
 
 Run in the project directory that contains a `bun.lock` file:
