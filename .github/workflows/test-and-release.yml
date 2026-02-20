@@ -25,6 +25,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # for npx publish
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -51,7 +57,7 @@ jobs:
         if: ${{ github.ref == env.MAIN_REF }}
         uses: changesets/action@v1
         with:
-          publish: bunx changeset publish
+          publish: npx changeset publish
           title: ${{ env.RELEASE }}
           commit: ${{ env.RELEASE }}
         env:
