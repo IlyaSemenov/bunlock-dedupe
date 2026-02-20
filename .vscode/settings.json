@@ -1,0 +1,17 @@
+{
+  "editor.tabSize": 2,
+  "files.readonlyInclude": {
+    "dist/**": true
+  },
+  "[javascript][typescript][json][jsonc]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
+  },
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit"
+  },
+  "search.exclude": {
+    "node_modules": true,
+    "dist": true
+  }
+}

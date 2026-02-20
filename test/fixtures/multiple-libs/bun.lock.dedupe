@@ -1,0 +1,36 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "sandbox",
+      "dependencies": {
+        "app-a": "1.0.0",
+        "app-b": "1.0.0",
+        "app-c": "1.0.0",
+        "alpha-lib": "^3.0.0",
+        "beta-lib": "^2.2.0",
+        "gamma-lib": "^1.5.0",
+      },
+    },
+  },
+  "packages": {
+    "alpha-lib": ["alpha-lib@3.0.2", "", {}, "sha"],
+
+    "app-a": ["app-a@1.0.0", "", { "dependencies": { "alpha-lib": "^2.8.0", "beta-lib": "~2.1.0", "gamma-lib": "^1.4.0" } }, "sha"],
+
+    "app-a/alpha-lib": ["alpha-lib@2.9.9", "", {}, "sha"],
+
+    "app-a/beta-lib": ["beta-lib@2.1.7", "", {}, "sha"],
+
+    "app-b": ["app-b@1.0.0", "", { "dependencies": { "alpha-lib": "^3.0.0", "beta-lib": "^2.0.0" } }, "sha"],
+
+    "app-c": ["app-c@1.0.0", "", { "dependencies": { "gamma-lib": "~1.4.0" } }, "sha"],
+
+    "app-c/gamma-lib": ["gamma-lib@1.4.3", "", {}, "sha"],
+
+    "beta-lib": ["beta-lib@2.2.3", "", {}, "sha"],
+
+    "gamma-lib": ["gamma-lib@1.5.4", "", {}, "sha"],
+  },
+}

@@ -1,0 +1,32 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "@mono/root",
+    },
+    "apps/app1": {
+      "name": "@mono/app1",
+      "dependencies": {
+        "shared-lib": "^1.5.0",
+      },
+    },
+    "apps/app2": {
+      "name": "@mono/app2",
+      "dependencies": {
+        "shared-lib": "^1.4.0",
+      },
+    },
+    "apps/app3": {
+      "name": "@mono/app3",
+      "dependencies": {
+        "shared-lib": "1.4.3",
+      },
+    },
+  },
+  "packages": {
+    "@mono/app3/shared-lib": ["shared-lib@1.4.3", "", {}, "sha"],
+
+    "shared-lib": ["shared-lib@1.5.2", "", {}, "sha"],
+  },
+}

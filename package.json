@@ -1,0 +1,48 @@
+{
+  "name": "bunlock",
+  "version": "0.0.0",
+  "description": "Analyze and deduplicate bun.lock dependencies",
+  "type": "module",
+  "packageManager": "bun@1.3.9",
+  "license": "MIT",
+  "bin": {
+    "bunlock": "./dist/cli.mjs"
+  },
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./cli": "./dist/cli.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "cli": "bun src/cli.ts",
+    "types": "tsgo",
+    "lint": "biome check --write .",
+    "check": "bun run types && bun run lint",
+    "changeset": "changeset",
+    "prepublishOnly": "bun run build",
+    "prepare": "lefthook install",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.2",
+    "@changesets/cli": "^2.29.8",
+    "@tsconfig/bun": "^1.0.10",
+    "@types/bun": "^1.3.6",
+    "@types/node": "^24.10.13",
+    "@types/semver": "^7.7.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260124.1",
+    "lefthook": "^2.1.1",
+    "tsdown": "^0.20.3",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "citty": "^0.2.1",
+    "json5": "^2.2.3",
+    "semver": "^7.7.4"
+  }
+}

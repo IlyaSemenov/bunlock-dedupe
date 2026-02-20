@@ -1,0 +1,27 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "dependencies": {
+        "@nuxt/ui": "^4.4.0",
+        "vaul-vue": "0.4.1",
+        "reka-ui": "2.7.0",
+      },
+    },
+  },
+  "packages": {
+    "@nuxt/ui": ["@nuxt/ui@4.4.0", "", { "dependencies": { "@vueuse/core": "^14.1.0" } }, "sha"],
+
+    "@vueuse/core": ["@vueuse/core@14.1.0", "", {}, "sha"],
+
+    "reka-ui": ["reka-ui@2.7.0", "", { "dependencies": { "@vueuse/core": "^12.5.0" } }, "sha"],
+
+    "reka-ui/@vueuse/core": ["@vueuse/core@12.8.2", "", {}, "sha"],
+
+    "vaul-vue": ["vaul-vue@0.4.1", "", { "dependencies": { "@vueuse/core": "^10.8.0" } }, "sha"],
+
+    "vaul-vue/@vueuse/core": ["@vueuse/core@10.11.1", "", {}, "sha"],
+  },
+}
