@@ -1,5 +1,15 @@
 # bunlock-dedupe
 
+## 1.3.0
+
+### Minor Changes
+
+- 89399c7: Add summary report after analysis and fix.
+
+### Patch Changes
+
+- 467a2d3: Fix: align `bun.lock` key sorting with Bun package-path order.
+
 ## 1.2.0
 
 ### Minor Changes
