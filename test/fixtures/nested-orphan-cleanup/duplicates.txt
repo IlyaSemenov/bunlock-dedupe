@@ -7,5 +7,5 @@
 undici-types
   ✅ 7.16.0
     - example > @types/node: ~7.16.0
-  ❌ 5.28.5
-    - example > bun-types > @types/node: ~5.26.0
+  🗑️ 5.28.5
+    - example > bun-types > @types/node ⬆️: ~5.26.0

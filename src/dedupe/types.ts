@@ -40,6 +40,7 @@ export type DependencyRequest = {
   resolvedLockKey: string
   resolvedVersion: string
   requestPath: string[]
+  requesterWillBeRewritten?: boolean
 }
 
 export type DependencyGraph = {
@@ -50,7 +51,12 @@ export type DependencyGraph = {
   requests: DependencyRequest[]
 }
 
-export type DedupeStatus = "target" | "can-dedupe" | "cannot-dedupe" | "unknown"
+export type DedupeStatus =
+  | "target"
+  | "can-dedupe"
+  | "cannot-dedupe"
+  | "unknown"
+  | "orphan"
 
 export type DuplicateVersionInfo = {
   version: string

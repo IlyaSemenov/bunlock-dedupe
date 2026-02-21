@@ -12,6 +12,15 @@ import type {
 } from "./types"
 import { compareStrings } from "./utils"
 
+type RewriteByPackage = Map<string, Map<string, string>>
+type TemplatesByPackageAndVersion = Map<string, Map<string, string>>
+
+type OrphanDetectionContext = {
+  rewrites: RewriteByPackage
+  templates: TemplatesByPackageAndVersion
+  packagesByLockKey: Map<string, ResolvedPackage>
+}
+
 function resolveDependencyLockKey(
   requesterLockKey: string | undefined,
   dependencyName: string,
@@ -385,6 +394,102 @@ function attachRequestPaths(graph: DependencyGraph): void {
   }
 }
 
+function collectVersionRewrites(
+  duplicates: DuplicatePackageInfo[],
+): RewriteByPackage {
+  const rewrites: RewriteByPackage = new Map()
+
+  for (const duplicate of duplicates) {
+    for (const versionInfo of duplicate.versions) {
+      if (
+        versionInfo.status !== "can-dedupe" ||
+        !versionInfo.dedupeTargetVersion ||
+        versionInfo.dedupeTargetVersion === versionInfo.version
+      ) {
+        continue
+      }
+
+      const perVersion =
+        rewrites.get(duplicate.name) ?? new Map<string, string>()
+      perVersion.set(versionInfo.version, versionInfo.dedupeTargetVersion)
+      rewrites.set(duplicate.name, perVersion)
+    }
+  }
+
+  return rewrites
+}
+
+function collectTemplateLockKeys(
+  packagesByLockKey: Map<string, ResolvedPackage>,
+): TemplatesByPackageAndVersion {
+  const templates: TemplatesByPackageAndVersion = new Map()
+
+  for (const [lockKey, packageEntry] of packagesByLockKey.entries()) {
+    let byVersion = templates.get(packageEntry.name)
+    if (!byVersion) {
+      byVersion = new Map()
+      templates.set(packageEntry.name, byVersion)
+    }
+
+    if (!byVersion.has(packageEntry.version) || lockKey === packageEntry.name) {
+      byVersion.set(packageEntry.version, lockKey)
+    }
+  }
+
+  return templates
+}
+
+function requestWillBeRemovedByRequesterRewrite(
+  request: DependencyRequest,
+  requestedVersion: string,
+  context: OrphanDetectionContext,
+): boolean {
+  const requesterPackage = context.packagesByLockKey.get(
+    request.requesterNodeId,
+  )
+  if (!requesterPackage) {
+    return false
+  }
+
+  const requesterTargetVersion = context.rewrites
+    .get(requesterPackage.name)
+    ?.get(requesterPackage.version)
+  if (
+    !requesterTargetVersion ||
+    requesterTargetVersion === requesterPackage.version
+  ) {
+    return false
+  }
+
+  const templateLockKey = context.templates
+    .get(requesterPackage.name)
+    ?.get(requesterTargetVersion)
+  if (!templateLockKey) {
+    return false
+  }
+
+  const targetRequester = context.packagesByLockKey.get(templateLockKey)
+  if (!targetRequester) {
+    return false
+  }
+
+  const targetDependencies = {
+    ...targetRequester.dependencies,
+    ...targetRequester.optionalDependencies,
+    ...targetRequester.peerDependencies,
+  }
+  const targetRange = targetDependencies[request.dependencyName]
+  if (!targetRange) {
+    return true
+  }
+
+  const compatibility = evaluateRangeCompatibility(
+    targetRange,
+    requestedVersion,
+  )
+  return compatibility === false
+}
+
 export function analyzeDuplicatePackages(
   lock: BunLockFile,
 ): DuplicatePackageInfo[] {
@@ -575,6 +680,53 @@ export function analyzeDuplicatePackages(
       targetVersion,
       versions: versionRows,
     })
+  }
+
+  const orphanDetectionContext: OrphanDetectionContext = {
+    rewrites: collectVersionRewrites(duplicates),
+    templates: collectTemplateLockKeys(packagesByLockKey),
+    packagesByLockKey,
+  }
+
+  for (const request of graph.requests) {
+    const requesterPackage = packagesByLockKey.get(request.requesterNodeId)
+    if (!requesterPackage) {
+      continue
+    }
+
+    const targetVersion = orphanDetectionContext.rewrites
+      .get(requesterPackage.name)
+      ?.get(requesterPackage.version)
+    request.requesterWillBeRewritten = Boolean(
+      targetVersion && targetVersion !== requesterPackage.version,
+    )
+  }
+
+  for (const duplicate of duplicates) {
+    for (const versionInfo of duplicate.versions) {
+      if (
+        versionInfo.status !== "cannot-dedupe" &&
+        versionInfo.status !== "unknown"
+      ) {
+        continue
+      }
+
+      if (versionInfo.requests.length === 0) {
+        continue
+      }
+
+      const becomesUnreachable = versionInfo.requests.every((request) =>
+        requestWillBeRemovedByRequesterRewrite(
+          request,
+          versionInfo.version,
+          orphanDetectionContext,
+        ),
+      )
+
+      if (becomesUnreachable) {
+        versionInfo.status = "orphan"
+      }
+    }
   }
 
   return duplicates.sort((left, right) => compareStrings(left.name, right.name))

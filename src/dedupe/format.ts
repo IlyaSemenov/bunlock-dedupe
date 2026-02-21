@@ -13,6 +13,10 @@ function formatVersionLine(versionInfo: DuplicateVersionInfo): string {
     return `❌ ${versionInfo.version}`
   }
 
+  if (versionInfo.status === "orphan") {
+    return `🗑️ ${versionInfo.version}`
+  }
+
   return `❓ ${versionInfo.version}`
 }
 
@@ -57,7 +61,18 @@ export function formatDuplicatesReport(
       lines.push(`  ${formatVersionLine(versionInfo)}`)
 
       for (const request of versionInfo.requests) {
-        const pathText = request.requestPath.join(" > ")
+        const pathSegments = [...request.requestPath]
+        if (
+          versionInfo.status === "orphan" &&
+          request.requesterWillBeRewritten &&
+          pathSegments.length > 0
+        ) {
+          const lastIndex = pathSegments.length - 1
+          const lastSegment = pathSegments[lastIndex]
+          pathSegments[lastIndex] = `${lastSegment} ⬆️`
+        }
+
+        const pathText = pathSegments.join(" > ")
         lines.push(`    - ${pathText}: ${request.range}`)
       }
     }
