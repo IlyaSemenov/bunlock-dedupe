@@ -4,6 +4,12 @@ import { writeFileSync } from "node:fs"
 import { parseArgs } from "node:util"
 
 import {
+  buildAnalyzeSummary,
+  buildFixSummary,
+  formatAnalyzeSummary,
+  formatFixSummary,
+} from "./cli-messages"
+import {
   analyzeDuplicatePackages,
   dedupeLockText,
   formatDuplicatesReport,
@@ -73,31 +79,40 @@ function run(): void {
 
   const { path: lockPath, content: lockText } = readBunLock(bunLockPath)
 
+  const parsedLock = parseBunLock(lockText)
+  const duplicateGroups = analyzeDuplicatePackages(parsedLock)
+
   if (!values.fix) {
-    const parsedLock = parseBunLock(lockText)
-    const duplicateGroups = analyzeDuplicatePackages(parsedLock)
+    const dedupeResult = dedupeLockText(lockText)
     console.log(
       formatDuplicatesReport(duplicateGroups, {
         fixableOnly: values.fixable,
       }),
     )
+    console.log("")
+    const summary = buildAnalyzeSummary(
+      duplicateGroups,
+      dedupeResult.rewrittenPackages,
+      dedupeResult.touchedEntries,
+    )
+    console.log(formatAnalyzeSummary(summary, lockPath))
     return
   }
 
   const result = dedupeLockText(lockText)
   if (!result.changed) {
-    console.log(`No dedupe opportunities found in ${lockPath}.`)
+    const summary = buildFixSummary(duplicateGroups, 0, 0)
+    console.log(formatFixSummary(summary, lockPath))
     return
   }
 
   writeFileSync(lockPath, result.lockText, "utf8")
-  console.log(
-    `Dedupe complete: rewrote ${result.touchedEntries} entr${
-      result.touchedEntries === 1 ? "y" : "ies"
-    } across ${result.rewrittenPackages} package${
-      result.rewrittenPackages === 1 ? "" : "s"
-    } in ${lockPath}.`,
+  const summary = buildFixSummary(
+    duplicateGroups,
+    result.rewrittenPackages,
+    result.touchedEntries,
   )
+  console.log(formatFixSummary(summary, lockPath))
 }
 
 run()
