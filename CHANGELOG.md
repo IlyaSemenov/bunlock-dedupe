@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.2.0
+
+### Minor Changes
+
+- 18308dd: Detect orphan versions that become unreachable after deduplication.
+
 ## 1.1.1
 
 ### Patch Changes
