@@ -21,7 +21,7 @@ test("computes bun.lock nesting depth for scoped and unscoped keys", () => {
   }
 })
 
-test("sorts bun.lock keys by nesting depth, then lexicographically", () => {
+test("sorts bun.lock keys by nesting depth, then by package path", () => {
   const keys = [
     "read-yaml-file/js-yaml/argparse",
     "read-yaml-file/js-yaml",
@@ -40,5 +40,25 @@ test("sorts bun.lock keys by nesting depth, then lexicographically", () => {
     "read-yaml-file/js-yaml",
     "bun-types/@types/node/undici-types",
     "read-yaml-file/js-yaml/argparse",
+  ])
+})
+
+test("sorts same-depth keys by package segments, not raw key string", () => {
+  const keys = [
+    "@parcel/watcher-wasm/napi-wasm",
+    "@parcel/watcher/node-addon-api",
+    "nuxt-auth-utils/hookable",
+    "nuxt/escape-string-regexp",
+    "stylelint-scss/mdn-data",
+    "stylelint/file-entry-cache",
+  ]
+
+  expect([...keys].sort(compareLockKeysByNesting)).toEqual([
+    "@parcel/watcher/node-addon-api",
+    "@parcel/watcher-wasm/napi-wasm",
+    "nuxt/escape-string-regexp",
+    "nuxt-auth-utils/hookable",
+    "stylelint/file-entry-cache",
+    "stylelint-scss/mdn-data",
   ])
 })
