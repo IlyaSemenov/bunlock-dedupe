@@ -28,7 +28,7 @@ bunx bunlock-dedupe /path/to/bun.lock --fix
 
 **No flags** — scans the lockfile and lists every package that appears in more than one version. For each, it shows the package name, the versions found, and the full dependency path that pulled in each version (so you can see which package required what).
 
-**`--fixable`** — same scan, but only shows packages where deduplication is actually possible. Marks the version that would be kept (`✅`) and the versions that can be upgraded to it (`⬆️`).
+**`--fixable`** — same scan, but only shows packages where deduplication is actually possible. Marks the version that will be kept (`✅`), the versions that can be upgraded to it (`⬆️`), and orphan versions (`🗑️`) that will be removed when the parent is deduped.
 
 **`--fix`** — rewrites the lockfile, upgrading every dedupe-compatible version to the highest version that all their semver ranges allow.
 

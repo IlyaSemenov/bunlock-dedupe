@@ -32,12 +32,17 @@ export function formatDuplicatesReport(
   const filteredDuplicates = fixableOnly
     ? duplicates
         .filter((duplicate) =>
-          duplicate.versions.some((version) => version.status === "can-dedupe"),
+          duplicate.versions.some(
+            (version) =>
+              version.status === "can-dedupe" || version.status === "orphan",
+          ),
         )
         .map((duplicate) => {
           const versions = duplicate.versions.filter(
             (version) =>
-              version.status === "target" || version.status === "can-dedupe",
+              version.status === "target" ||
+              version.status === "can-dedupe" ||
+              version.status === "orphan",
           )
           return {
             ...duplicate,
