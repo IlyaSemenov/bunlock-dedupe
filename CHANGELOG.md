@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.3.1
+
+### Patch Changes
+
+- 9581b39: Include orphans in `--fixable` output.
+
 ## 1.3.0
 
 ### Minor Changes
