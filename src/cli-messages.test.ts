@@ -5,8 +5,8 @@ import {
   buildFixSummary,
   formatAnalyzeSummary,
   formatFixSummary,
-} from "../src/cli-messages"
-import type { DuplicatePackageInfo } from "../src/dedupe"
+} from "./cli-messages"
+import type { DuplicatePackageInfo } from "./dedupe"
 
 const lockPath = "/project/bun.lock"
 
