@@ -1,0 +1,12 @@
+app-a
+  ✅ 1.6.0
+    - example > app-c: ^1.0.0
+  ⬆️ 1.5.0 → 1.6.0
+    - example: ^1.0.0
+
+utils
+  ✅ 2.1.0
+    - example > app-b: ^2.0.0
+    - example > app-c > app-a: ^2.0.0
+  🗑️ 1.2.0
+    - example > app-a ⬆️: ^1.0.0
