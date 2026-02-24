@@ -1,4 +1,4 @@
-import type { DuplicatePackageInfo, DuplicateVersionInfo } from "./types"
+import type { DuplicatePackageInfo, DuplicateVersionInfo } from "./analyze"
 
 function formatVersionLine(versionInfo: DuplicateVersionInfo): string {
   if (versionInfo.status === "target") {

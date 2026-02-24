@@ -1,4 +1,4 @@
-import type { DuplicatePackageInfo } from "./dedupe/types"
+import type { DuplicatePackageInfo } from "./dedupe"
 
 function plural(count: number, one: string, many: string): string {
   return count === 1 ? `${count} ${one}` : `${count} ${many}`

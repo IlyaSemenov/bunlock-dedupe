@@ -1,6 +1,29 @@
 import JSON5 from "json5"
 
-import type { BunLockFile, DependencyMap } from "./types"
+export type DependencyMap = Record<string, string>
+
+export type BunLockWorkspace = {
+  name?: string
+  dependencies?: DependencyMap
+  devDependencies?: DependencyMap
+  optionalDependencies?: DependencyMap
+  peerDependencies?: DependencyMap
+}
+
+export type BunPackageMeta = {
+  dependencies?: DependencyMap
+  optionalDependencies?: DependencyMap
+  peerDependencies?: DependencyMap
+}
+
+export type BunPackageEntry = [string, string?, BunPackageMeta?, string?]
+
+export type BunLockFile = {
+  lockfileVersion?: number
+  configVersion?: number
+  workspaces?: Record<string, BunLockWorkspace>
+  packages?: Record<string, BunPackageEntry>
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null

@@ -1,16 +1,56 @@
 import semver from "semver"
 
+import type { BunLockFile, BunPackageMeta } from "./parse"
 import { normalizeDependencyMap, parseResolvedSpec } from "./parse"
-import type {
-  BunLockFile,
-  BunPackageMeta,
-  DependencyGraph,
-  DependencyRequest,
-  DuplicatePackageInfo,
-  DuplicateVersionInfo,
-  ResolvedPackage,
-} from "./types"
 import { compareStrings } from "./utils"
+
+export type ResolvedPackage = {
+  lockKey: string
+  name: string
+  version: string
+  dependencies: BunPackageMeta["dependencies"]
+  optionalDependencies: BunPackageMeta["optionalDependencies"]
+  peerDependencies: BunPackageMeta["peerDependencies"]
+}
+
+export type DependencyRequest = {
+  requesterNodeId: string
+  requesterLabel: string
+  dependencyName: string
+  range: string
+  resolvedLockKey: string
+  resolvedVersion: string
+  requestPath: string[]
+  requesterWillBeRewritten?: boolean
+}
+
+export type DependencyGraph = {
+  rootNodeId: string
+  workspaceNodeIds: string[]
+  nodeLabels: Map<string, string>
+  adjacency: Map<string, Set<string>>
+  requests: DependencyRequest[]
+}
+
+export type DedupeStatus =
+  | "target"
+  | "can-dedupe"
+  | "cannot-dedupe"
+  | "unknown"
+  | "orphan"
+
+export type DuplicateVersionInfo = {
+  version: string
+  status: DedupeStatus
+  dedupeTargetVersion?: string
+  requests: DependencyRequest[]
+}
+
+export type DuplicatePackageInfo = {
+  name: string
+  targetVersion: string
+  versions: DuplicateVersionInfo[]
+}
 
 type RewriteByPackage = Map<string, Map<string, string>>
 type TemplatesByPackageAndVersion = Map<string, Map<string, string>>

@@ -6,7 +6,7 @@ import {
   formatAnalyzeSummary,
   formatFixSummary,
 } from "../src/cli-messages"
-import type { DuplicatePackageInfo } from "../src/dedupe/types"
+import type { DuplicatePackageInfo } from "../src/dedupe"
 
 const lockPath = "/project/bun.lock"
 

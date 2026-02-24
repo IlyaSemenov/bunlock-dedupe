@@ -1,10 +1,10 @@
-import { analyzeDuplicatePackages } from "./analyze"
-import { parseBunLock, parseResolvedSpec } from "./parse"
-import type {
-  BunLockFile,
-  BunPackageEntry,
-  DuplicatePackageInfo,
-} from "./types"
+import { analyzeDuplicatePackages, type DuplicatePackageInfo } from "./analyze"
+import {
+  type BunLockFile,
+  type BunPackageEntry,
+  parseBunLock,
+  parseResolvedSpec,
+} from "./parse"
 import { compareLockKeysByNesting } from "./utils"
 
 type RewriteByPackage = Map<string, Map<string, string>>
