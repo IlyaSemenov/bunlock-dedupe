@@ -1,0 +1,21 @@
+framework
+  ✅ 2.0.5
+    - example: ^2.0.0
+  ⬆️ 2.0.0 → 2.0.5
+    - example > plugin: ^2.0.0
+
+renderer
+  ✅ 2.0.5
+    - example: ^2.0.0
+    - example > framework: 2.0.5
+  🗑️ 2.0.0
+    - example > plugin > framework ⬆️: 2.0.0
+
+utils
+  ✅ 2.0.5
+    - example: ^2.0.0
+    - example > framework: 2.0.5
+    - example > renderer: 2.0.5
+  🗑️ 2.0.0
+    - example > plugin > framework ⬆️: 2.0.0
+    - example > plugin > framework > renderer: 2.0.0

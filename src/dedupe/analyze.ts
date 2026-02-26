@@ -479,6 +479,46 @@ function collectTemplateLockKeys(
   return templates
 }
 
+function duplicateVersionKey(name: string, version: string): string {
+  return `${name}@${version}`
+}
+
+function collectDuplicateStatuses(
+  duplicates: DuplicatePackageInfo[],
+): Map<string, DedupeStatus> {
+  const statuses = new Map<string, DedupeStatus>()
+
+  for (const duplicate of duplicates) {
+    for (const versionInfo of duplicate.versions) {
+      statuses.set(
+        duplicateVersionKey(duplicate.name, versionInfo.version),
+        versionInfo.status,
+      )
+    }
+  }
+
+  return statuses
+}
+
+function requestHasOrphanRequester(
+  request: DependencyRequest,
+  context: OrphanDetectionContext,
+  duplicateStatuses: Map<string, DedupeStatus>,
+): boolean {
+  const requesterPackage = context.packagesByLockKey.get(
+    request.requesterNodeId,
+  )
+  if (!requesterPackage) {
+    return false
+  }
+
+  return (
+    duplicateStatuses.get(
+      duplicateVersionKey(requesterPackage.name, requesterPackage.version),
+    ) === "orphan"
+  )
+}
+
 function requestWillBeRemovedByRequesterRewrite(
   request: DependencyRequest,
   requestedVersion: string,
@@ -742,29 +782,49 @@ export function analyzeDuplicatePackages(
     )
   }
 
-  for (const duplicate of duplicates) {
-    for (const versionInfo of duplicate.versions) {
-      if (
-        versionInfo.status !== "cannot-dedupe" &&
-        versionInfo.status !== "unknown"
-      ) {
-        continue
-      }
+  const duplicateStatuses = collectDuplicateStatuses(duplicates)
+  let orphanChanged = true
 
-      if (versionInfo.requests.length === 0) {
-        continue
-      }
+  while (orphanChanged) {
+    orphanChanged = false
 
-      const becomesUnreachable = versionInfo.requests.every((request) =>
-        requestWillBeRemovedByRequesterRewrite(
-          request,
-          versionInfo.version,
-          orphanDetectionContext,
-        ),
-      )
+    for (const duplicate of duplicates) {
+      for (const versionInfo of duplicate.versions) {
+        if (
+          versionInfo.status !== "cannot-dedupe" &&
+          versionInfo.status !== "unknown"
+        ) {
+          continue
+        }
 
-      if (becomesUnreachable) {
+        if (versionInfo.requests.length === 0) {
+          continue
+        }
+
+        const becomesUnreachable = versionInfo.requests.every(
+          (request) =>
+            requestWillBeRemovedByRequesterRewrite(
+              request,
+              versionInfo.version,
+              orphanDetectionContext,
+            ) ||
+            requestHasOrphanRequester(
+              request,
+              orphanDetectionContext,
+              duplicateStatuses,
+            ),
+        )
+
+        if (!becomesUnreachable) {
+          continue
+        }
+
         versionInfo.status = "orphan"
+        duplicateStatuses.set(
+          duplicateVersionKey(duplicate.name, versionInfo.version),
+          "orphan",
+        )
+        orphanChanged = true
       }
     }
   }

@@ -1,0 +1,32 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "dependencies": {
+        "framework": "^2.0.0",
+        "renderer": "^2.0.0",
+        "utils": "^2.0.0",
+        "plugin": "1.0.0",
+      },
+    },
+  },
+  "packages": {
+    "framework": ["framework@2.0.5", "", { "dependencies": { "renderer": "2.0.5", "utils": "2.0.5" } }, "sha"],
+
+    "plugin": ["plugin@1.0.0", "", { "dependencies": { "framework": "^2.0.0" } }, "sha"],
+
+    "plugin/framework": ["framework@2.0.0", "", { "dependencies": { "renderer": "2.0.0", "utils": "2.0.0" } }, "sha"],
+
+    "plugin/framework/utils": ["utils@2.0.0", "", {}, "sha"],
+
+    "utils": ["utils@2.0.5", "", {}, "sha"],
+
+    "plugin/framework/renderer": ["renderer@2.0.0", "", { "dependencies": { "utils": "2.0.0" } }, "sha"],
+
+    "plugin/framework/renderer/utils": ["utils@2.0.0", "", {}, "sha"],
+
+    "renderer": ["renderer@2.0.5", "", { "dependencies": { "utils": "2.0.5" } }, "sha"],
+  },
+}
