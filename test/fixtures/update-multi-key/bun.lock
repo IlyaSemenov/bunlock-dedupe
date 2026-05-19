@@ -1,0 +1,43 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "myapp",
+      "dependencies": {
+        "plugin-a": "^1.0.0",
+        "plugin-b": "^1.0.0",
+        "shared-dep": "^2.0.0"
+      }
+    }
+  },
+  "packages": {
+    "plugin-a": [
+      "plugin-a@1.0.0",
+      "",
+      { "dependencies": { "app-core": "^1.0.0" } },
+      "sha"
+    ],
+    "plugin-a/app-core": [
+      "app-core@1.0.0",
+      "",
+      { "dependencies": { "shared-dep": "^1.0.0" } },
+      "sha"
+    ],
+    "plugin-a/app-core/shared-dep": ["shared-dep@1.5.0", "", {}, "sha"],
+    "plugin-b": [
+      "plugin-b@1.0.0",
+      "",
+      { "dependencies": { "app-core": "^1.0.0" } },
+      "sha"
+    ],
+    "plugin-b/app-core": [
+      "app-core@1.0.0",
+      "",
+      { "dependencies": { "shared-dep": "^1.0.0" } },
+      "sha"
+    ],
+    "plugin-b/app-core/shared-dep": ["shared-dep@1.5.0", "", {}, "sha"],
+    "shared-dep": ["shared-dep@2.1.0", "", {}, "sha"]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "myapp",
+      "dependencies": {
+        "app-blocking": "^1.0.0",
+        "shared-dep": "^2.0.0"
+      }
+    }
+  },
+  "packages": {
+    "app-blocking": [
+      "app-blocking@1.0.0",
+      "",
+      { "dependencies": { "shared-dep": "^1.0.0" } },
+      "sha"
+    ],
+    "app-blocking/shared-dep": ["shared-dep@1.5.0", "", {}, "sha"],
+    "shared-dep": ["shared-dep@2.1.0", "", {}, "sha"]
+  }
+}

@@ -6,25 +6,38 @@ import { parseArgs } from "node:util"
 import {
   buildAnalyzeSummary,
   buildFixSummary,
+  buildUpdateSummary,
   formatAnalyzeSummary,
   formatFixSummary,
+  formatUpdateFixSummary,
+  formatUpdateSummary,
 } from "./cli-messages"
 import {
   analyzeDuplicatePackages,
+  analyzeDuplicatePackagesWithUpdates,
+  classifyUpdateSafety,
   dedupeLockText,
   formatDuplicatesReport,
   parseBunLock,
+  type SuggestedUpdate,
+  updateAndDedupeLockText,
 } from "./dedupe"
 import { readBunLock } from "./read-bun-lock"
 
 const commandName = "bunlock-dedupe"
 
 function printUsage(): void {
-  console.log(`${commandName} [path] [--fixable | --fix]`)
+  console.log(
+    `${commandName} [path] [--fixable | --fix] [--update [--offline]]`,
+  )
   console.log("")
   console.log("Analyze duplicate bun.lock sub-dependencies.")
   console.log("Use --fixable to show only fixable packages and versions.")
   console.log("Use --fix to rewrite dedupe-compatible entries.")
+  console.log(
+    "Use --update to find intermediate dep updates that unlock deduplication.",
+  )
+  console.log("Use --update --offline to analyze only the local bun cache.")
 }
 
 function fail(message: string): never {
@@ -33,8 +46,33 @@ function fail(message: string): never {
   process.exit(1)
 }
 
-function run(): void {
-  let values: { fix: boolean; fixable: boolean; help: boolean }
+function countUniqueSkippedDedupePackages(updates: SuggestedUpdate[]): number {
+  return new Set(
+    updates.flatMap((update) => update.deduplicates.map((d) => d.name)),
+  ).size
+}
+
+function buildSkippedUpdateSummary(updates: SuggestedUpdate[]): {
+  skippedUpdateCount: number
+  skippedPackageCount: number
+  skippedDedupePackageCount: number
+} {
+  return {
+    skippedUpdateCount: updates.length,
+    skippedPackageCount: new Set(updates.map((update) => update.packageName))
+      .size,
+    skippedDedupePackageCount: countUniqueSkippedDedupePackages(updates),
+  }
+}
+
+async function run(): Promise<void> {
+  let values: {
+    fix: boolean
+    fixable: boolean
+    help: boolean
+    update: boolean
+    offline: boolean
+  }
   let positionals: string[]
 
   try {
@@ -57,6 +95,14 @@ function run(): void {
           short: "h",
           default: false,
         },
+        update: {
+          type: "boolean",
+          default: false,
+        },
+        offline: {
+          type: "boolean",
+          default: false,
+        },
       },
     })
     values = parsed.values
@@ -75,11 +121,80 @@ function run(): void {
     fail("expected at most one positional path argument")
   }
 
+  if (values.offline && !values.update) {
+    fail("--offline is only valid with --update")
+  }
+
+  if (values.offline && values.fix) {
+    fail(
+      "--offline cannot be used with --fix because bun cache lacks registry integrity metadata",
+    )
+  }
+
   const bunLockPath = positionals[0]
-
   const { path: lockPath, content: lockText } = readBunLock(bunLockPath)
-
   const parsedLock = parseBunLock(lockText)
+
+  if (values.update) {
+    const { duplicates, suggestedUpdates } =
+      await analyzeDuplicatePackagesWithUpdates(parsedLock, {
+        offline: values.offline,
+      })
+
+    if (values.fix) {
+      const result = await updateAndDedupeLockText(lockText, {
+        offline: values.offline,
+      })
+      if (result.changed) {
+        writeFileSync(lockPath, result.lockText, "utf8")
+      }
+
+      console.log(
+        formatDuplicatesReport(duplicates, {
+          fixableOnly: values.fixable,
+          suggestedUpdates,
+          skippedUpdates: result.skippedUpdates,
+        }),
+      )
+      console.log("")
+      console.log(
+        formatUpdateFixSummary(
+          result.changed
+            ? {
+                kind: "updated",
+                updatedEntries: result.updatedEntries,
+                updatedPackages: result.updatedPackages,
+                dedupedEntries: result.dedupedEntries,
+                dedupedPackages: result.dedupedPackages,
+                ...buildSkippedUpdateSummary(result.skippedUpdates),
+              }
+            : {
+                kind: "no-change",
+                ...buildSkippedUpdateSummary(result.skippedUpdates),
+              },
+          lockPath,
+        ),
+      )
+      return
+    }
+
+    console.log(
+      formatDuplicatesReport(duplicates, {
+        fixableOnly: values.fixable,
+        suggestedUpdates,
+        skippedUpdates: (
+          await classifyUpdateSafety(lockText, suggestedUpdates, {
+            offline: values.offline,
+          })
+        ).skippedUpdates,
+      }),
+    )
+    console.log("")
+    const updateSummary = buildUpdateSummary(duplicates, suggestedUpdates)
+    console.log(formatUpdateSummary(updateSummary, lockPath))
+    return
+  }
+
   const duplicateGroups = analyzeDuplicatePackages(parsedLock)
 
   if (!values.fix) {

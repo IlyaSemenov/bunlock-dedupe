@@ -135,7 +135,7 @@ function compareVersionDescending(left: string, right: string): number {
   return compareStrings(right, left)
 }
 
-function evaluateRangeCompatibility(
+export function evaluateRangeCompatibility(
   range: string,
   targetVersion: string,
 ): boolean | undefined {

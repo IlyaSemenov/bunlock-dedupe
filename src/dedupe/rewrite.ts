@@ -244,7 +244,7 @@ function renderObjectLines(
   return lines
 }
 
-function renderBunLock(lock: BunLockFile): string {
+export function renderBunLock(lock: BunLockFile): string {
   const rootObject = lock as unknown as Record<string, unknown>
   return `${renderObjectLines(rootObject, 0, true).join("\n")}\n`
 }

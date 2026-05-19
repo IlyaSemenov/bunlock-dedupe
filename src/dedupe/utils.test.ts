@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test"
 
-import {
-  compareLockKeysByNesting,
-  getLockKeyNestingDepth,
-} from "../src/dedupe/utils"
+import { compareLockKeysByNesting, getLockKeyNestingDepth } from "./utils"
 
 test("computes bun.lock nesting depth for scoped and unscoped keys", () => {
   const depthByKey = new Map([

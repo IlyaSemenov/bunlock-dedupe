@@ -1,0 +1,31 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "myapp",
+      "dependencies": {
+        "app-blocking": "^1.0.0",
+        "dep-a": "^2.0.0",
+        "dep-b": "^2.0.0"
+      }
+    }
+  },
+  "packages": {
+    "app-blocking": [
+      "app-blocking@1.0.0",
+      "",
+      {
+        "dependencies": {
+          "dep-a": "^1.0.0",
+          "dep-b": "^1.0.0"
+        }
+      },
+      "sha"
+    ],
+    "app-blocking/dep-a": ["dep-a@1.5.0", "", {}, "sha"],
+    "app-blocking/dep-b": ["dep-b@1.5.0", "", {}, "sha"],
+    "dep-a": ["dep-a@2.1.0", "", {}, "sha"],
+    "dep-b": ["dep-b@2.1.0", "", {}, "sha"]
+  }
+}

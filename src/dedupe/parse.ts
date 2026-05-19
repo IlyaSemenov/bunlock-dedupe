@@ -14,6 +14,10 @@ export type BunPackageMeta = {
   dependencies?: DependencyMap
   optionalDependencies?: DependencyMap
   peerDependencies?: DependencyMap
+  optionalPeers?: string[]
+  bin?: string | Record<string, string>
+  os?: string | string[]
+  cpu?: string | string[]
 }
 
 export type BunPackageEntry = [string, string?, BunPackageMeta?, string?]

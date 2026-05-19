@@ -1,0 +1,366 @@
+import { describe, expect, test } from "bun:test"
+
+import { fetchCompatibleVersions, fetchPackageMetadata } from "./registry"
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+type FetchFn = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>
+
+function makeFetch(responses: Record<string, unknown>): FetchFn {
+  return async (input: string | URL | Request) => {
+    const url = typeof input === "string" ? input : input.toString()
+    const body = responses[url]
+    if (body === undefined) {
+      return new Response(null, { status: 404 })
+    }
+    return new Response(JSON.stringify(body), { status: 200 })
+  }
+}
+
+function makeReadDir(
+  entries: Record<string, string[]>,
+): (path: string) => string[] {
+  return (path: string) => {
+    const result = entries[path]
+    if (!result) throw new Error(`ENOENT: ${path}`)
+    return result
+  }
+}
+
+function makeReadFile(files: Record<string, string>): (path: string) => string {
+  return (path: string) => {
+    const result = files[path]
+    if (!result) throw new Error(`ENOENT: ${path}`)
+    return result
+  }
+}
+
+// ---------------------------------------------------------------------------
+// fetchCompatibleVersions — online
+// ---------------------------------------------------------------------------
+
+describe("fetchCompatibleVersions (online)", () => {
+  const abbreviatedMeta = {
+    versions: {
+      "1.0.0": {},
+      "1.1.0": {},
+      "1.2.0": {},
+      "2.0.0": {},
+      "2.1.0": {},
+    },
+  }
+
+  test("returns versions matching a single range, sorted descending", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      fetchFn: makeFetch({
+        "https://registry.npmjs.org/pkg": abbreviatedMeta,
+      }),
+    })
+    expect(result).toEqual(["1.2.0", "1.1.0", "1.0.0"])
+  })
+
+  test("intersects multiple ranges", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0", ">=1.1.0"],
+      fetchFn: makeFetch({
+        "https://registry.npmjs.org/pkg": abbreviatedMeta,
+      }),
+    })
+    expect(result).toEqual(["1.2.0", "1.1.0"])
+  })
+
+  test("returns empty array when no versions match", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^3.0.0"],
+      fetchFn: makeFetch({
+        "https://registry.npmjs.org/pkg": abbreviatedMeta,
+      }),
+    })
+    expect(result).toEqual([])
+  })
+
+  test("returns empty array on registry 404", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      fetchFn: makeFetch({}),
+    })
+    expect(result).toEqual([])
+  })
+
+  test("returns empty array on fetch error", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      fetchFn: (async () => {
+        throw new Error("network error")
+      }) as FetchFn,
+    })
+    expect(result).toEqual([])
+  })
+
+  test("encodes scoped package name correctly", async () => {
+    let calledUrl = ""
+    const result = await fetchCompatibleVersions("@scope/pkg", {
+      ranges: ["^1.0.0"],
+      fetchFn: (async (input: string | URL | Request) => {
+        calledUrl = typeof input === "string" ? input : input.toString()
+        return new Response(JSON.stringify(abbreviatedMeta), { status: 200 })
+      }) as FetchFn,
+    })
+    expect(calledUrl).toBe("https://registry.npmjs.org/@scope%2Fpkg")
+    expect(result).toEqual(["1.2.0", "1.1.0", "1.0.0"])
+  })
+
+  test("skips non-semver versions silently", async () => {
+    const meta = {
+      versions: {
+        "1.0.0": {},
+        "not-a-version": {},
+        "1.1.0": {},
+      },
+    }
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      fetchFn: makeFetch({ "https://registry.npmjs.org/pkg": meta }),
+    })
+    expect(result).toEqual(["1.1.0", "1.0.0"])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// fetchCompatibleVersions — offline
+// ---------------------------------------------------------------------------
+
+describe("fetchCompatibleVersions (offline)", () => {
+  const cacheDir = "/fake/cache"
+
+  test("reads versions from cache dirs, sorted descending", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({
+        "/fake/cache/pkg": ["1.0.0@@@1", "1.1.0@@@1", "2.0.0@@@1"],
+      }),
+    })
+    expect(result).toEqual(["1.1.0", "1.0.0"])
+  })
+
+  test("handles @@@N suffix variants (not just @@@1)", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({
+        "/fake/cache/pkg": ["1.0.0@@@1", "1.1.0@@@2", "1.2.0@@@3"],
+      }),
+    })
+    expect(result).toEqual(["1.2.0", "1.1.0", "1.0.0"])
+  })
+
+  test("handles scoped packages", async () => {
+    const result = await fetchCompatibleVersions("@scope/pkg", {
+      ranges: ["^1.0.0"],
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({
+        "/fake/cache/@scope/pkg": ["1.0.0@@@1", "1.1.0@@@1"],
+      }),
+    })
+    expect(result).toEqual(["1.1.0", "1.0.0"])
+  })
+
+  test("reads versions from canonical direct cache dirs", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({
+        "/fake/cache": [
+          "pkg@1.0.0@@@1",
+          "pkg@1.1.0@@@1",
+          "pkg@2.0.0@@@1",
+          "other@1.9.0@@@1",
+        ],
+      }),
+    })
+    expect(result).toEqual(["1.1.0", "1.0.0"])
+  })
+
+  test("reads scoped versions from canonical direct cache dirs", async () => {
+    const result = await fetchCompatibleVersions("@scope/pkg", {
+      ranges: ["^1.0.0"],
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({
+        "/fake/cache/@scope": [
+          "pkg@1.0.0@@@1",
+          "pkg@1.1.0@@@1",
+          "other@1.9.0@@@1",
+        ],
+      }),
+    })
+    expect(result).toEqual(["1.1.0", "1.0.0"])
+  })
+
+  test("returns empty array when cache dir is missing", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({}),
+    })
+    expect(result).toEqual([])
+  })
+
+  test("skips entries that don't match @@@N pattern", async () => {
+    const result = await fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({
+        "/fake/cache/pkg": ["1.0.0@@@1", "some-other-dir", "1.1.0@@@1"],
+      }),
+    })
+    expect(result).toEqual(["1.1.0", "1.0.0"])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// fetchPackageMetadata — online
+// ---------------------------------------------------------------------------
+
+describe("fetchPackageMetadata (online)", () => {
+  const meta = {
+    version: "1.1.0",
+    dependencies: { dep: "^2.0.0" },
+    peerDependencies: { peer: "^3.0.0" },
+  }
+
+  test("returns metadata for a package version", async () => {
+    const result = await fetchPackageMetadata("pkg", "1.1.0", {
+      fetchFn: makeFetch({
+        "https://registry.npmjs.org/pkg/1.1.0": meta,
+      }),
+    })
+    expect(result).toEqual(meta)
+  })
+
+  test("returns null on 404", async () => {
+    const result = await fetchPackageMetadata("pkg", "9.9.9", {
+      fetchFn: makeFetch({}),
+    })
+    expect(result).toBeNull()
+  })
+
+  test("returns null on fetch error", async () => {
+    const result = await fetchPackageMetadata("pkg", "1.0.0", {
+      fetchFn: (async () => {
+        throw new Error("network error")
+      }) as FetchFn,
+    })
+    expect(result).toBeNull()
+  })
+
+  test("encodes scoped package name correctly", async () => {
+    let calledUrl = ""
+    await fetchPackageMetadata("@scope/pkg", "1.0.0", {
+      fetchFn: (async (input: string | URL | Request) => {
+        calledUrl = typeof input === "string" ? input : input.toString()
+        return new Response(JSON.stringify(meta), { status: 200 })
+      }) as FetchFn,
+    })
+    expect(calledUrl).toBe("https://registry.npmjs.org/@scope%2Fpkg/1.0.0")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// fetchPackageMetadata — offline
+// ---------------------------------------------------------------------------
+
+describe("fetchPackageMetadata (offline)", () => {
+  const cacheDir = "/fake/cache"
+  const pkgJson = JSON.stringify({
+    version: "1.1.0",
+    dependencies: { dep: "^2.0.0" },
+  })
+
+  test("reads package.json from cache", async () => {
+    const result = await fetchPackageMetadata("pkg", "1.1.0", {
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({ "/fake/cache/pkg": ["1.1.0@@@1"] }),
+      readFileFn: makeReadFile({
+        "/fake/cache/pkg/1.1.0@@@1/package.json": pkgJson,
+      }),
+    })
+    expect(result).toEqual(JSON.parse(pkgJson))
+  })
+
+  test("handles any @@@N suffix", async () => {
+    const result = await fetchPackageMetadata("pkg", "1.2.0", {
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({ "/fake/cache/pkg": ["1.2.0@@@3"] }),
+      readFileFn: makeReadFile({
+        "/fake/cache/pkg/1.2.0@@@3/package.json": pkgJson,
+      }),
+    })
+    expect(result).toEqual(JSON.parse(pkgJson))
+  })
+
+  test("returns null when version not in cache", async () => {
+    const result = await fetchPackageMetadata("pkg", "9.9.9", {
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({ "/fake/cache/pkg": ["1.0.0@@@1"] }),
+      readFileFn: makeReadFile({}),
+    })
+    expect(result).toBeNull()
+  })
+
+  test("handles scoped packages", async () => {
+    const result = await fetchPackageMetadata("@scope/pkg", "1.0.0", {
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({ "/fake/cache/@scope/pkg": ["1.0.0@@@1"] }),
+      readFileFn: makeReadFile({
+        "/fake/cache/@scope/pkg/1.0.0@@@1/package.json": pkgJson,
+      }),
+    })
+    expect(result).toEqual(JSON.parse(pkgJson))
+  })
+
+  test("reads package.json from canonical direct cache dirs", async () => {
+    const result = await fetchPackageMetadata("pkg", "1.1.0", {
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({
+        "/fake/cache": ["pkg@1.1.0@@@1"],
+      }),
+      readFileFn: makeReadFile({
+        "/fake/cache/pkg@1.1.0@@@1/package.json": pkgJson,
+      }),
+    })
+    expect(result).toEqual(JSON.parse(pkgJson))
+  })
+
+  test("reads scoped package.json from canonical direct cache dirs", async () => {
+    const result = await fetchPackageMetadata("@scope/pkg", "1.1.0", {
+      offline: true,
+      cacheDir,
+      readDirFn: makeReadDir({
+        "/fake/cache/@scope": ["pkg@1.1.0@@@1"],
+      }),
+      readFileFn: makeReadFile({
+        "/fake/cache/@scope/pkg@1.1.0@@@1/package.json": pkgJson,
+      }),
+    })
+    expect(result).toEqual(JSON.parse(pkgJson))
+  })
+})

@@ -1,0 +1,15 @@
+{
+  "versions": { "app-core": ["1.0.0", "1.1.0", "1.2.0"] },
+  "metadata": {
+    "app-core": {
+      "1.2.0": {
+        "version": "1.2.0",
+        "dependencies": { "shared-dep": "^1.0.0" }
+      },
+      "1.1.0": {
+        "version": "1.1.0",
+        "dependencies": { "shared-dep": "^2.0.0" }
+      }
+    }
+  }
+}

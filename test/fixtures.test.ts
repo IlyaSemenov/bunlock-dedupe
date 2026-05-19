@@ -2,62 +2,129 @@ import { expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 
+import { buildUpdateSummary, formatUpdateSummary } from "../src/cli-messages"
 import {
   analyzeDuplicatePackages,
   dedupeLockText,
   formatDuplicatesReport,
   parseBunLock,
 } from "../src/dedupe"
+import { analyzeDuplicatePackagesWithUpdates } from "../src/dedupe/update-analyze"
+import type { PackageMetadata } from "../src/registry"
 
 const fixturesRoot = path.join(process.cwd(), "test", "fixtures")
 
-const fixtureNames = readdirSync(fixturesRoot, { withFileTypes: true })
+type RegistryFixture = {
+  versions: Record<string, string[]>
+  metadata: Record<string, Record<string, PackageMetadata>>
+}
+
+function makeFixtureFetch(fixtureDir: string) {
+  const registryPath = path.join(fixtureDir, "registry.json")
+  const registry: RegistryFixture = JSON.parse(
+    readFileSync(registryPath, "utf8"),
+  )
+
+  return async (input: string | URL | Request) => {
+    const url = typeof input === "string" ? input : input.toString()
+
+    if (!url.startsWith("https://registry.npmjs.org/")) {
+      return new Response(null, { status: 404 })
+    }
+
+    const requestPath = url.slice("https://registry.npmjs.org/".length)
+    const decoded = decodeURIComponent(requestPath)
+
+    const slashIdx = decoded.startsWith("@")
+      ? decoded.indexOf("/", decoded.indexOf("/") + 1)
+      : decoded.indexOf("/")
+
+    if (slashIdx === -1) {
+      const pkgName = decoded
+      const versions = registry.versions[pkgName]
+      if (!versions) return new Response(null, { status: 404 })
+      const versionsObj: Record<string, unknown> = {}
+      for (const v of versions) versionsObj[v] = {}
+      return new Response(JSON.stringify({ versions: versionsObj }), {
+        status: 200,
+      })
+    }
+
+    const pkgName = decoded.slice(0, slashIdx)
+    const version = decoded.slice(slashIdx + 1)
+    const meta = registry.metadata[pkgName]?.[version]
+    if (!meta) return new Response(null, { status: 404 })
+    return new Response(JSON.stringify(meta), { status: 200 })
+  }
+}
+
+const allFixtures = readdirSync(fixturesRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
-  .filter((entry) => {
-    const fixtureDir = path.join(fixturesRoot, entry.name)
-    const files = readdirSync(fixtureDir)
-    return (
-      files.includes("bun.lock") &&
-      files.includes("duplicates.txt") &&
-      files.includes("duplicates.fixable.txt") &&
-      files.includes("bun.lock.dedupe")
-    )
+  .map((entry) => {
+    const dir = path.join(fixturesRoot, entry.name)
+    const files = readdirSync(dir)
+    return { name: entry.name, dir, files }
   })
-  .map((entry) => entry.name)
-  .sort((left, right) => left.localeCompare(right))
+  .filter((f) => f.files.includes("bun.lock"))
+  .sort((a, b) => a.name.localeCompare(b.name))
 
-for (const fixtureName of fixtureNames) {
-  test(`fixture: ${fixtureName}`, () => {
-    const fixtureDir = path.join(fixturesRoot, fixtureName)
-    const sourceLockPath = path.join(fixtureDir, "bun.lock")
-    const expectedDuplicatesPath = path.join(fixtureDir, "duplicates.txt")
-    const expectedFixableDuplicatesPath = path.join(
-      fixtureDir,
-      "duplicates.fixable.txt",
-    )
-    const expectedDedupePath = path.join(fixtureDir, "bun.lock.dedupe")
+for (const { name, dir, files } of allFixtures) {
+  const hasDedupe =
+    files.includes("report.all.txt") &&
+    files.includes("report.fixable.txt") &&
+    files.includes("bun.dedupe.lock")
+  const hasUpdate =
+    files.includes("registry.json") && files.includes("report.update.txt")
 
-    const lockText = readFileSync(sourceLockPath, "utf8")
-    const expectedDuplicatesOutput = readFileSync(
-      expectedDuplicatesPath,
-      "utf8",
-    ).trimEnd()
-    const expectedFixableDuplicatesOutput = readFileSync(
-      expectedFixableDuplicatesPath,
-      "utf8",
-    ).trimEnd()
-    const expectedDedupeOutput = readFileSync(expectedDedupePath, "utf8")
+  test(`fixture: ${name}`, async () => {
+    const lockText = readFileSync(path.join(dir, "bun.lock"), "utf8")
 
-    const parsedLock = parseBunLock(lockText)
-    const duplicateGroups = analyzeDuplicatePackages(parsedLock)
-    const duplicatesOutput = formatDuplicatesReport(duplicateGroups)
-    const fixableDuplicatesOutput = formatDuplicatesReport(duplicateGroups, {
-      fixableOnly: true,
-    })
-    expect(duplicatesOutput).toBe(expectedDuplicatesOutput)
-    expect(fixableDuplicatesOutput).toBe(expectedFixableDuplicatesOutput)
+    if (hasDedupe) {
+      const parsedLock = parseBunLock(lockText)
+      const duplicateGroups = analyzeDuplicatePackages(parsedLock)
 
-    const dedupeResult = dedupeLockText(lockText)
-    expect(dedupeResult.lockText).toBe(expectedDedupeOutput)
+      const expectedAll = readFileSync(
+        path.join(dir, "report.all.txt"),
+        "utf8",
+      ).trimEnd()
+      const expectedFixable = readFileSync(
+        path.join(dir, "report.fixable.txt"),
+        "utf8",
+      ).trimEnd()
+      const expectedDedupe = readFileSync(
+        path.join(dir, "bun.dedupe.lock"),
+        "utf8",
+      )
+
+      expect(formatDuplicatesReport(duplicateGroups)).toBe(expectedAll)
+      expect(
+        formatDuplicatesReport(duplicateGroups, { fixableOnly: true }),
+      ).toBe(expectedFixable)
+
+      const dedupeResult = dedupeLockText(lockText)
+      expect(dedupeResult.lockText).toBe(expectedDedupe)
+    }
+
+    if (hasUpdate) {
+      const parsedLock = parseBunLock(lockText)
+      const fetchFn = makeFixtureFetch(dir)
+      const { duplicates, suggestedUpdates } =
+        await analyzeDuplicatePackagesWithUpdates(parsedLock, { fetchFn })
+
+      const fullOutput = [
+        formatDuplicatesReport(duplicates, { suggestedUpdates }),
+        "",
+        formatUpdateSummary(
+          buildUpdateSummary(duplicates, suggestedUpdates),
+          "bun.lock",
+        ),
+      ].join("\n")
+
+      const expected = readFileSync(
+        path.join(dir, "report.update.txt"),
+        "utf8",
+      ).trimEnd()
+      expect(fullOutput).toBe(expected)
+    }
   })
 }
