@@ -80,7 +80,7 @@ for (const { name, dir, files } of allFixtures) {
 
     if (hasDedupe) {
       const parsedLock = parseBunLock(lockText)
-      const duplicateGroups = analyzeDuplicatePackages(parsedLock)
+      const duplicates = analyzeDuplicatePackages(parsedLock)
       const dedupeResult = dedupeLockText(lockText)
 
       const expectedAll = readFileSync(
@@ -97,12 +97,12 @@ for (const { name, dir, files } of allFixtures) {
       )
 
       expect(
-        formatReport(duplicateGroups, dedupeResult, "bun.lock", {
+        formatReport(duplicates, dedupeResult, "bun.lock", {
           includeUnfixable: true,
         }),
       ).toBe(expectedAll)
       expect(
-        formatReport(duplicateGroups, dedupeResult, "bun.lock", {
+        formatReport(duplicates, dedupeResult, "bun.lock", {
           includeUnfixable: false,
         }),
       ).toBe(expectedFixable)

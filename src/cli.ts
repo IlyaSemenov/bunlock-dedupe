@@ -189,12 +189,12 @@ async function run(): Promise<void> {
     return
   }
 
-  const duplicateGroups = analyzeDuplicatePackages(parsedLock)
+  const duplicates = analyzeDuplicatePackages(parsedLock)
 
   if (!values.fix) {
     const dedupeResult = dedupeLockText(lockText)
     console.log(
-      formatReport(duplicateGroups, dedupeResult, lockPath, {
+      formatReport(duplicates, dedupeResult, lockPath, {
         includeUnfixable: values.all,
       }),
     )
@@ -203,14 +203,14 @@ async function run(): Promise<void> {
 
   const result = dedupeLockText(lockText)
   if (!result.changed) {
-    const fixSummary = buildFixSummary(duplicateGroups, 0, 0)
+    const fixSummary = buildFixSummary(duplicates, 0, 0)
     console.log(formatFixSummary(fixSummary, lockPath))
     return
   }
 
   writeFileSync(lockPath, result.lockText, "utf8")
   const fixSummary = buildFixSummary(
-    duplicateGroups,
+    duplicates,
     result.rewrittenPackages,
     result.touchedEntries,
   )
