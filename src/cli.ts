@@ -4,13 +4,11 @@ import { writeFileSync } from "node:fs"
 import { parseArgs } from "node:util"
 
 import {
-  buildAnalyzeSummary,
   buildFixSummary,
-  buildUpdateSummary,
-  formatAnalyzeSummary,
   formatFixSummary,
+  formatReport,
+  formatReportOutput,
   formatUpdateFixSummary,
-  formatUpdateSummary,
 } from "./cli-messages"
 import {
   analyzeDuplicatePackages,
@@ -150,36 +148,37 @@ async function run(): Promise<void> {
       }
 
       console.log(
-        formatDuplicatesReport(duplicates, {
-          fixableOnly: values.fixable,
-          suggestedUpdates,
-          skippedUpdates: result.skippedUpdates,
-        }),
-      )
-      console.log("")
-      console.log(
-        formatUpdateFixSummary(
-          result.changed
-            ? {
-                kind: "updated",
-                updatedEntries: result.updatedEntries,
-                updatedPackages: result.updatedPackages,
-                dedupedEntries: result.dedupedEntries,
-                dedupedPackages: result.dedupedPackages,
-                ...buildSkippedUpdateSummary(result.skippedUpdates),
-              }
-            : {
-                kind: "no-change",
-                ...buildSkippedUpdateSummary(result.skippedUpdates),
-              },
-          lockPath,
+        formatReportOutput(
+          formatDuplicatesReport(duplicates, {
+            fixableOnly: values.fixable,
+            suggestedUpdates,
+            skippedUpdates: result.skippedUpdates,
+          }),
+          formatUpdateFixSummary(
+            result.changed
+              ? {
+                  kind: "updated",
+                  updatedEntries: result.updatedEntries,
+                  updatedPackages: result.updatedPackages,
+                  dedupedEntries: result.dedupedEntries,
+                  dedupedPackages: result.dedupedPackages,
+                  ...buildSkippedUpdateSummary(result.skippedUpdates),
+                }
+              : {
+                  kind: "no-change",
+                  ...buildSkippedUpdateSummary(result.skippedUpdates),
+                },
+            lockPath,
+          ),
         ),
       )
       return
     }
 
+    const dedupeResult = dedupeLockText(lockText)
+
     console.log(
-      formatDuplicatesReport(duplicates, {
+      formatReport(duplicates, dedupeResult, lockPath, {
         fixableOnly: values.fixable,
         suggestedUpdates,
         skippedUpdates: (
@@ -189,9 +188,6 @@ async function run(): Promise<void> {
         ).skippedUpdates,
       }),
     )
-    console.log("")
-    const updateSummary = buildUpdateSummary(duplicates, suggestedUpdates)
-    console.log(formatUpdateSummary(updateSummary, lockPath))
     return
   }
 
@@ -200,34 +196,27 @@ async function run(): Promise<void> {
   if (!values.fix) {
     const dedupeResult = dedupeLockText(lockText)
     console.log(
-      formatDuplicatesReport(duplicateGroups, {
+      formatReport(duplicateGroups, dedupeResult, lockPath, {
         fixableOnly: values.fixable,
       }),
     )
-    console.log("")
-    const summary = buildAnalyzeSummary(
-      duplicateGroups,
-      dedupeResult.rewrittenPackages,
-      dedupeResult.touchedEntries,
-    )
-    console.log(formatAnalyzeSummary(summary, lockPath))
     return
   }
 
   const result = dedupeLockText(lockText)
   if (!result.changed) {
-    const summary = buildFixSummary(duplicateGroups, 0, 0)
-    console.log(formatFixSummary(summary, lockPath))
+    const fixSummary = buildFixSummary(duplicateGroups, 0, 0)
+    console.log(formatFixSummary(fixSummary, lockPath))
     return
   }
 
   writeFileSync(lockPath, result.lockText, "utf8")
-  const summary = buildFixSummary(
+  const fixSummary = buildFixSummary(
     duplicateGroups,
     result.rewrittenPackages,
     result.touchedEntries,
   )
-  console.log(formatFixSummary(summary, lockPath))
+  console.log(formatFixSummary(fixSummary, lockPath))
 }
 
 run()

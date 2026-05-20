@@ -7,3 +7,8 @@ demo-lib
     - example > group-b: ^2.0.2
   ⬆️ 2.0.1 → 2.0.2
     - example > group-c: ^2.0.1
+
+1 duplicate package in bun.lock.
+1 package can be deduped.
+
+Run with --fix to apply available dedupes.

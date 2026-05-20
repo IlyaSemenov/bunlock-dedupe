@@ -19,3 +19,9 @@ utils
   🗑️ 2.0.0
     - example > plugin > framework ⬆️: 2.0.0
     - example > plugin > framework > renderer: 2.0.0
+
+3 duplicate packages in bun.lock.
+1 package can be deduped.
+2 packages cannot be deduped.
+
+Run with --fix to apply available dedupes.

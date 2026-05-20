@@ -5,3 +5,8 @@ shared-lib
     - @mono/app2: ^1.4.0
   ❌ 1.4.3
     - @mono/app3: 1.4.3
+
+1 duplicate package in bun.lock.
+1 package can be deduped.
+
+Run with --fix to apply available dedupes.

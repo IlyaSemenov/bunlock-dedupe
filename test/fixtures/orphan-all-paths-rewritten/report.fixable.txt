@@ -10,3 +10,9 @@ utils
     - example > app-c > app-a: ^2.0.0
   🗑️ 1.2.0
     - example > app-a ⬆️: ^1.0.0
+
+2 duplicate packages in bun.lock.
+1 package can be deduped.
+1 package cannot be deduped.
+
+Run with --fix to apply available dedupes.

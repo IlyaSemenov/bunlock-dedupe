@@ -16,4 +16,7 @@ app-blocking
   👉 dep-a: 1.5.0 → 2.1.0
   👉 dep-b: 1.5.0 → 2.1.0
 
-Found 2 duplicate packages in bun.lock, 1 intermediate package can be updated to unlock deduplication.
+2 duplicate packages in bun.lock.
+1 intermediate package can be updated to unlock deduplication.
+
+Run with --update --fix to update intermediate packages and apply dedupes.

@@ -9,3 +9,9 @@ undici-types
     - example > @types/node: ~7.16.0
   🗑️ 5.28.5
     - example > bun-types > @types/node ⬆️: ~5.26.0
+
+2 duplicate packages in bun.lock.
+1 package can be deduped.
+1 package cannot be deduped.
+
+Run with --fix to apply available dedupes.

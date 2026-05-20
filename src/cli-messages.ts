@@ -1,18 +1,155 @@
-import type { DuplicatePackageInfo, SuggestedUpdate } from "./dedupe"
+import type { DuplicatePackageInfo } from "./dedupe/analyze"
+import { formatDuplicatesReport } from "./dedupe/format"
+import type { SuggestedUpdate } from "./dedupe/update-analyze"
 
 function plural(count: number, one: string, many: string): string {
   return count === 1 ? `${count} ${one}` : `${count} ${many}`
 }
 
-export type AnalyzeSummary =
-  | { kind: "clean" }
-  | { kind: "no-auto-fix"; totalDuplicatePackages: number }
-  | {
-      kind: "fixable"
-      totalDuplicatePackages: number
-      fixablePackages: number
-      fixableEntries: number
+// --- Report (body + summary combined) ---
+
+export function formatReportOutput(
+  reportBody: string,
+  summary: string,
+): string {
+  return reportBody + "\n\n" + summary
+}
+
+export function formatReport(
+  duplicates: DuplicatePackageInfo[],
+  dedupeResult: { rewrittenPackages: number; touchedEntries: number },
+  lockPath: string,
+  options?: {
+    fixableOnly?: boolean
+    suggestedUpdates?: SuggestedUpdate[]
+    skippedUpdates?: SuggestedUpdate[]
+  },
+): string {
+  const summary = buildReportSummary(
+    duplicates,
+    dedupeResult,
+    options?.suggestedUpdates,
+  )
+  const body = formatDuplicatesReport(duplicates, {
+    fixableOnly: options?.fixableOnly,
+    suggestedUpdates: options?.suggestedUpdates,
+    skippedUpdates: options?.skippedUpdates,
+  })
+  return formatReportOutput(body, formatReportSummary(summary, lockPath))
+}
+
+// --- Report summary ---
+
+export type ReportSummary = {
+  totalDuplicatePackages: number
+  readyPackages: number
+  intermediatePackages: number
+  cannotDedupePackages: number
+}
+
+export function buildReportSummary(
+  duplicateGroups: DuplicatePackageInfo[],
+  dedupeResult: { rewrittenPackages: number; touchedEntries: number },
+  suggestedUpdates?: SuggestedUpdate[],
+): ReportSummary {
+  const readyPackages = dedupeResult.rewrittenPackages
+  const intermediatePackages = suggestedUpdates
+    ? new Set(suggestedUpdates.map((u) => u.packageName)).size
+    : 0
+  const cannotDedupePackages = suggestedUpdates
+    ? countCannotDedupePackages(duplicateGroups, suggestedUpdates)
+    : duplicateGroups.length - readyPackages
+
+  return {
+    totalDuplicatePackages: duplicateGroups.length,
+    readyPackages,
+    intermediatePackages,
+    cannotDedupePackages,
+  }
+}
+
+export function formatReportSummary(
+  summary: ReportSummary,
+  lockPath: string,
+): string {
+  if (summary.totalDuplicatePackages === 0) {
+    return `All clean — no duplicate packages in ${lockPath}.`
+  }
+
+  const lines: string[] = []
+  lines.push(
+    `${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}.`,
+  )
+
+  if (summary.readyPackages > 0) {
+    lines.push(
+      `${plural(summary.readyPackages, "package", "packages")} can be deduped.`,
+    )
+  }
+
+  if (summary.intermediatePackages > 0) {
+    lines.push(
+      `${plural(summary.intermediatePackages, "intermediate package", "intermediate packages")} can be updated to unlock deduplication.`,
+    )
+  }
+
+  if (summary.cannotDedupePackages > 0) {
+    lines.push(
+      `${plural(summary.cannotDedupePackages, "package", "packages")} cannot be deduped.`,
+    )
+  }
+
+  const canFix = summary.readyPackages > 0
+  const canUpdate = summary.intermediatePackages > 0
+
+  if (canFix || canUpdate) {
+    lines.push("")
+    if (canFix) {
+      lines.push("Run with --fix to apply available dedupes.")
     }
+    if (canUpdate) {
+      lines.push(
+        "Run with --update --fix to update intermediate packages and apply dedupes.",
+      )
+    }
+  }
+
+  return lines.join("\n")
+}
+
+// --- Internal helpers ---
+
+/**
+ * Count packages that have no fixable path even after applying suggested updates.
+ * A package is "truly stuck" if:
+ *   - it has no can-dedupe or orphan versions (from raw analysis), AND
+ *   - not all of its cannot-dedupe requests are covered by suggested updates
+ */
+export function countCannotDedupePackages(
+  duplicates: DuplicatePackageInfo[],
+  suggestedUpdates: SuggestedUpdate[],
+): number {
+  const updateLockKeys = new Set(
+    suggestedUpdates.map((u) => u.requesterLockKey),
+  )
+
+  return duplicates.filter((group) => {
+    const hasFixable = group.versions.some(
+      (v) => v.status === "can-dedupe" || v.status === "orphan",
+    )
+    if (hasFixable) return false
+
+    const cannotDedupeVersions = group.versions.filter(
+      (v) => v.status === "cannot-dedupe",
+    )
+    const allCovered = cannotDedupeVersions.every((v) =>
+      v.requests.every((r) => updateLockKeys.has(r.requesterNodeId)),
+    )
+    return !allCovered
+  }).length
+}
+
+// --- Fix summary (--fix without --update) ---
 
 export type FixSummary =
   | { kind: "clean" }
@@ -23,28 +160,6 @@ export type FixSummary =
       fixedEntries: number
       remainingPackages: number
     }
-
-export function buildAnalyzeSummary(
-  duplicateGroups: DuplicatePackageInfo[],
-  fixablePackages: number,
-  fixableEntries: number,
-): AnalyzeSummary {
-  if (duplicateGroups.length === 0) {
-    return { kind: "clean" }
-  }
-  if (fixablePackages === 0) {
-    return {
-      kind: "no-auto-fix",
-      totalDuplicatePackages: duplicateGroups.length,
-    }
-  }
-  return {
-    kind: "fixable",
-    totalDuplicatePackages: duplicateGroups.length,
-    fixablePackages,
-    fixableEntries,
-  }
-}
 
 export function buildFixSummary(
   duplicateGroups: DuplicatePackageInfo[],
@@ -68,33 +183,24 @@ export function buildFixSummary(
   }
 }
 
-export function formatAnalyzeSummary(
-  summary: AnalyzeSummary,
+export function formatFixSummary(
+  summary: FixSummary,
   lockPath: string,
 ): string {
   if (summary.kind === "clean") {
     return `All clean — no duplicate packages in ${lockPath}.`
   }
   if (summary.kind === "no-auto-fix") {
-    return `Found ${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}, none can be deduped.`
+    return `${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}.\nNone can be deduped.`
   }
-  const skippedNote =
-    summary.totalDuplicatePackages > summary.fixablePackages
-      ? ` (${plural(summary.totalDuplicatePackages - summary.fixablePackages, "package", "packages")} cannot be deduped)`
+  const remainingNote =
+    summary.remainingPackages > 0
+      ? `\n${plural(summary.remainingPackages, "package", "packages")} cannot be deduped.`
       : ""
-  return (
-    `Found ${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}.\n` +
-    `Ready to dedupe: ${plural(summary.fixablePackages, "package", "packages")}, ${plural(summary.fixableEntries, "entry", "entries")}${skippedNote}.\n` +
-    `Run with --fix to apply.`
-  )
+  return `Deduped ${plural(summary.fixedEntries, "entry", "entries")} across ${plural(summary.fixedPackages, "package", "packages")} in ${lockPath}.${remainingNote}`
 }
 
-export type UpdateSummary = {
-  totalDuplicatePackages: number
-  cannotDedupePackages: number
-  suggestedUpdateCount: number
-  suggestedPackageCount: number
-}
+// --- Update fix summary (--update --fix) ---
 
 export type UpdateFixSummary =
   | {
@@ -114,39 +220,6 @@ export type UpdateFixSummary =
       skippedDedupePackageCount?: number
     }
 
-export function buildUpdateSummary(
-  duplicateGroups: DuplicatePackageInfo[],
-  suggestedUpdates: SuggestedUpdate[],
-): UpdateSummary {
-  const cannotDedupePackages = duplicateGroups.filter((group) =>
-    group.versions.some((v) => v.status === "cannot-dedupe"),
-  ).length
-  const uniquePackages = new Set(suggestedUpdates.map((u) => u.packageName))
-    .size
-  return {
-    totalDuplicatePackages: duplicateGroups.length,
-    cannotDedupePackages,
-    suggestedUpdateCount: suggestedUpdates.length,
-    suggestedPackageCount: uniquePackages,
-  }
-}
-
-export function formatUpdateSummary(
-  summary: UpdateSummary,
-  lockPath: string,
-): string {
-  if (summary.totalDuplicatePackages === 0) {
-    return `All clean — no duplicate packages in ${lockPath}.`
-  }
-  if (summary.cannotDedupePackages === 0) {
-    return `Found ${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}, all can be deduped.`
-  }
-  if (summary.suggestedUpdateCount === 0) {
-    return `Found ${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}, ${plural(summary.cannotDedupePackages, "package", "packages")} cannot be deduped. No intermediate updates found.`
-  }
-  return `Found ${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}${summary.suggestedPackageCount > 0 ? `, ${plural(summary.suggestedPackageCount, "intermediate package", "intermediate packages")} can be updated to unlock deduplication` : ""}.`
-}
-
 export function formatUpdateFixSummary(
   summary: UpdateFixSummary,
   lockPath: string,
@@ -157,7 +230,8 @@ export function formatUpdateFixSummary(
       : ""
 
   if (summary.kind === "no-change") {
-    return `No update fixes applied to ${lockPath}.${skippedText}`
+    const base = `No update fixes applied to ${lockPath}.`
+    return skippedText ? `${base}\n${skippedText.trim()}` : base
   }
 
   const updatedText =
@@ -169,22 +243,6 @@ export function formatUpdateFixSummary(
       ? `deduped ${plural(summary.dedupedEntries, "entry", "entries")} across ${plural(summary.dedupedPackages, "package", "packages")}`
       : "no dedupe rewrites needed"
 
-  return `${updatedText} and ${dedupedText} in ${lockPath}.${skippedText}`
-}
-
-export function formatFixSummary(
-  summary: FixSummary,
-  lockPath: string,
-): string {
-  if (summary.kind === "clean") {
-    return `All clean — no duplicate packages in ${lockPath}.`
-  }
-  if (summary.kind === "no-auto-fix") {
-    return `Found ${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}, none can be deduped.`
-  }
-  const remainingNote =
-    summary.remainingPackages > 0
-      ? ` (${plural(summary.remainingPackages, "package", "packages")} cannot be deduped)`
-      : ""
-  return `Deduped ${plural(summary.fixedEntries, "entry", "entries")} across ${plural(summary.fixedPackages, "package", "packages")} in ${lockPath}${remainingNote}.`
+  const base = `${updatedText} and ${dedupedText} in ${lockPath}.`
+  return skippedText ? `${base}\n${skippedText.trim()}` : base
 }

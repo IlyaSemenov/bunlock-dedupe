@@ -5,3 +5,6 @@
     - example > reka-ui: ^12.5.0
   ❌ 10.11.1
     - example > vaul-vue: ^10.8.0
+
+1 duplicate package in bun.lock.
+1 package cannot be deduped.

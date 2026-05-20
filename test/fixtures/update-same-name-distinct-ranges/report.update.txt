@@ -11,4 +11,8 @@ app-core
     - myapp > plugin-a: ^1.0.0
   👉 shared-dep: 1.5.0 → 2.1.0
 
-Found 1 duplicate package in bun.lock, 1 intermediate package can be updated to unlock deduplication.
+1 duplicate package in bun.lock.
+1 intermediate package can be updated to unlock deduplication.
+1 package cannot be deduped.
+
+Run with --update --fix to update intermediate packages and apply dedupes.

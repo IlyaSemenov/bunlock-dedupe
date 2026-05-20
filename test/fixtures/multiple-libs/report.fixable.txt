@@ -3,3 +3,9 @@ gamma-lib
     - sandbox: ^1.5.0
   ⬆️ 1.4.8 → 1.5.4
     - sandbox > app-a: ^1.4.0
+
+3 duplicate packages in bun.lock.
+1 package can be deduped.
+2 packages cannot be deduped.
+
+Run with --fix to apply available dedupes.

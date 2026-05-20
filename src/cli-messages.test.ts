@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test"
 
 import {
-  buildAnalyzeSummary,
   buildFixSummary,
-  buildUpdateSummary,
-  formatAnalyzeSummary,
+  countCannotDedupePackages,
   formatFixSummary,
+  formatReportSummary,
   formatUpdateFixSummary,
-  formatUpdateSummary,
+  type ReportSummary,
 } from "./cli-messages"
 import type { DuplicatePackageInfo, SuggestedUpdate } from "./dedupe"
 
@@ -21,36 +20,250 @@ function makeGroups(count: number): DuplicatePackageInfo[] {
   }))
 }
 
-describe("buildAnalyzeSummary", () => {
-  test("no duplicates → clean", () => {
-    expect(buildAnalyzeSummary(makeGroups(0), 0, 0)).toEqual({ kind: "clean" })
+// --- formatReportSummary ---
+
+describe("formatReportSummary", () => {
+  test("clean", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 0,
+      readyPackages: 0,
+      intermediatePackages: 0,
+      cannotDedupePackages: 0,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "All clean — no duplicate packages in /project/bun.lock.",
+    )
   })
 
-  test("duplicates but nothing fixable → no-auto-fix", () => {
-    expect(buildAnalyzeSummary(makeGroups(3), 0, 0)).toEqual({
-      kind: "no-auto-fix",
+  test("ready only — all fixable", () => {
+    const summary: ReportSummary = {
       totalDuplicatePackages: 3,
-    })
+      readyPackages: 3,
+      intermediatePackages: 0,
+      cannotDedupePackages: 0,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "3 duplicate packages in /project/bun.lock.\n" +
+        "3 packages can be deduped.\n" +
+        "\n" +
+        "Run with --fix to apply available dedupes.",
+    )
   })
 
-  test("all duplicates fixable", () => {
-    expect(buildAnalyzeSummary(makeGroups(3), 3, 14)).toEqual({
-      kind: "fixable",
-      totalDuplicatePackages: 3,
-      fixablePackages: 3,
-      fixableEntries: 14,
-    })
+  test("ready only — singular", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 1,
+      readyPackages: 1,
+      intermediatePackages: 0,
+      cannotDedupePackages: 0,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "1 duplicate package in /project/bun.lock.\n" +
+        "1 package can be deduped.\n" +
+        "\n" +
+        "Run with --fix to apply available dedupes.",
+    )
   })
 
-  test("some duplicates fixable", () => {
-    expect(buildAnalyzeSummary(makeGroups(5), 3, 14)).toEqual({
-      kind: "fixable",
+  test("ready + cannot", () => {
+    const summary: ReportSummary = {
       totalDuplicatePackages: 5,
-      fixablePackages: 3,
-      fixableEntries: 14,
-    })
+      readyPackages: 3,
+      intermediatePackages: 0,
+      cannotDedupePackages: 2,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "5 duplicate packages in /project/bun.lock.\n" +
+        "3 packages can be deduped.\n" +
+        "2 packages cannot be deduped.\n" +
+        "\n" +
+        "Run with --fix to apply available dedupes.",
+    )
+  })
+
+  test("cannot only — nothing can be done", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 3,
+      readyPackages: 0,
+      intermediatePackages: 0,
+      cannotDedupePackages: 3,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "3 duplicate packages in /project/bun.lock.\n" +
+        "3 packages cannot be deduped.",
+    )
+  })
+
+  test("cannot only — singular", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 1,
+      readyPackages: 0,
+      intermediatePackages: 0,
+      cannotDedupePackages: 1,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "1 duplicate package in /project/bun.lock.\n" +
+        "1 package cannot be deduped.",
+    )
+  })
+
+  test("intermediate only", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 2,
+      readyPackages: 0,
+      intermediatePackages: 1,
+      cannotDedupePackages: 0,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "2 duplicate packages in /project/bun.lock.\n" +
+        "1 intermediate package can be updated to unlock deduplication.\n" +
+        "\n" +
+        "Run with --update --fix to update intermediate packages and apply dedupes.",
+    )
+  })
+
+  test("ready + intermediate", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 5,
+      readyPackages: 2,
+      intermediatePackages: 1,
+      cannotDedupePackages: 0,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "5 duplicate packages in /project/bun.lock.\n" +
+        "2 packages can be deduped.\n" +
+        "1 intermediate package can be updated to unlock deduplication.\n" +
+        "\n" +
+        "Run with --fix to apply available dedupes.\n" +
+        "Run with --update --fix to update intermediate packages and apply dedupes.",
+    )
+  })
+
+  test("ready + intermediate + cannot", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 7,
+      readyPackages: 2,
+      intermediatePackages: 1,
+      cannotDedupePackages: 2,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "7 duplicate packages in /project/bun.lock.\n" +
+        "2 packages can be deduped.\n" +
+        "1 intermediate package can be updated to unlock deduplication.\n" +
+        "2 packages cannot be deduped.\n" +
+        "\n" +
+        "Run with --fix to apply available dedupes.\n" +
+        "Run with --update --fix to update intermediate packages and apply dedupes.",
+    )
+  })
+
+  test("intermediate + cannot", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 3,
+      readyPackages: 0,
+      intermediatePackages: 1,
+      cannotDedupePackages: 1,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "3 duplicate packages in /project/bun.lock.\n" +
+        "1 intermediate package can be updated to unlock deduplication.\n" +
+        "1 package cannot be deduped.\n" +
+        "\n" +
+        "Run with --update --fix to update intermediate packages and apply dedupes.",
+    )
   })
 })
+
+// --- countCannotDedupePackages ---
+
+describe("countCannotDedupePackages", () => {
+  function makeCannotDedupeGroup(
+    name: string,
+    requesterNodeId: string,
+  ): DuplicatePackageInfo {
+    return {
+      name,
+      targetVersion: "2.0.0",
+      versions: [
+        { version: "2.0.0", status: "target", requests: [] },
+        {
+          version: "1.0.0",
+          status: "cannot-dedupe",
+          requests: [
+            {
+              requesterNodeId,
+              requesterLabel: requesterNodeId,
+              dependencyName: name,
+              range: "^1.0.0",
+              resolvedLockKey: `${requesterNodeId}/${name}`,
+              resolvedVersion: "1.0.0",
+              requestPath: [],
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  function makeCanDedupeGroup(name: string): DuplicatePackageInfo {
+    return {
+      name,
+      targetVersion: "2.0.0",
+      versions: [
+        { version: "2.0.0", status: "target", requests: [] },
+        {
+          version: "1.0.0",
+          status: "can-dedupe",
+          dedupeTargetVersion: "2.0.0",
+          requests: [],
+        },
+      ],
+    }
+  }
+
+  function makeUpdate(lockKey: string): SuggestedUpdate {
+    return {
+      requesterLockKey: lockKey,
+      packageName: "blocker",
+      fromVersion: "1.0.0",
+      toVersion: "1.1.0",
+      deduplicates: [
+        { name: "dep", fromVersion: "1.0.0", targetVersion: "2.0.0" },
+      ],
+      constrainedBy: [
+        { requesterLabel: "root", requesterPath: ["root"], range: "^1.0.0" },
+      ],
+    }
+  }
+
+  test("no duplicates", () => {
+    expect(countCannotDedupePackages([], [])).toBe(0)
+  })
+
+  test("cannot-dedupe fully covered by update", () => {
+    const groups = [makeCannotDedupeGroup("dep-a", "blocker")]
+    const updates = [makeUpdate("blocker")]
+    expect(countCannotDedupePackages(groups, updates)).toBe(0)
+  })
+
+  test("cannot-dedupe not covered by update", () => {
+    const groups = [makeCannotDedupeGroup("dep-a", "other-blocker")]
+    const updates = [makeUpdate("blocker")]
+    expect(countCannotDedupePackages(groups, updates)).toBe(1)
+  })
+
+  test("mix of can-dedupe and cannot-dedupe", () => {
+    const groups = [
+      makeCanDedupeGroup("dep-a"),
+      makeCannotDedupeGroup("dep-b", "blocker"),
+      makeCannotDedupeGroup("dep-c", "other"),
+    ]
+    const updates = [makeUpdate("blocker")]
+    expect(countCannotDedupePackages(groups, updates)).toBe(1)
+  })
+})
+
+// --- buildFixSummary ---
 
 describe("buildFixSummary", () => {
   test("no duplicates → clean", () => {
@@ -83,89 +296,7 @@ describe("buildFixSummary", () => {
   })
 })
 
-describe("formatAnalyzeSummary", () => {
-  test("clean", () => {
-    expect(formatAnalyzeSummary({ kind: "clean" }, lockPath)).toBe(
-      "All clean — no duplicate packages in /project/bun.lock.",
-    )
-  })
-
-  test("no-auto-fix, singular", () => {
-    expect(
-      formatAnalyzeSummary(
-        { kind: "no-auto-fix", totalDuplicatePackages: 1 },
-        lockPath,
-      ),
-    ).toBe(
-      "Found 1 duplicate package in /project/bun.lock, none can be deduped.",
-    )
-  })
-
-  test("no-auto-fix, plural", () => {
-    expect(
-      formatAnalyzeSummary(
-        { kind: "no-auto-fix", totalDuplicatePackages: 3 },
-        lockPath,
-      ),
-    ).toBe(
-      "Found 3 duplicate packages in /project/bun.lock, none can be deduped.",
-    )
-  })
-
-  test("fixable, all packages fixable", () => {
-    expect(
-      formatAnalyzeSummary(
-        {
-          kind: "fixable",
-          totalDuplicatePackages: 3,
-          fixablePackages: 3,
-          fixableEntries: 14,
-        },
-        lockPath,
-      ),
-    ).toBe(
-      "Found 3 duplicate packages in /project/bun.lock.\n" +
-        "Ready to dedupe: 3 packages, 14 entries.\n" +
-        "Run with --fix to apply.",
-    )
-  })
-
-  test("fixable, some packages skipped", () => {
-    expect(
-      formatAnalyzeSummary(
-        {
-          kind: "fixable",
-          totalDuplicatePackages: 5,
-          fixablePackages: 3,
-          fixableEntries: 14,
-        },
-        lockPath,
-      ),
-    ).toBe(
-      "Found 5 duplicate packages in /project/bun.lock.\n" +
-        "Ready to dedupe: 3 packages, 14 entries (2 packages cannot be deduped).\n" +
-        "Run with --fix to apply.",
-    )
-  })
-
-  test("fixable, singular counts", () => {
-    expect(
-      formatAnalyzeSummary(
-        {
-          kind: "fixable",
-          totalDuplicatePackages: 2,
-          fixablePackages: 1,
-          fixableEntries: 1,
-        },
-        lockPath,
-      ),
-    ).toBe(
-      "Found 2 duplicate packages in /project/bun.lock.\n" +
-        "Ready to dedupe: 1 package, 1 entry (1 package cannot be deduped).\n" +
-        "Run with --fix to apply.",
-    )
-  })
-})
+// --- formatFixSummary ---
 
 describe("formatFixSummary", () => {
   test("clean", () => {
@@ -181,7 +312,7 @@ describe("formatFixSummary", () => {
         lockPath,
       ),
     ).toBe(
-      "Found 1 duplicate package in /project/bun.lock, none can be deduped.",
+      "1 duplicate package in /project/bun.lock.\n" + "None can be deduped.",
     )
   })
 
@@ -192,7 +323,7 @@ describe("formatFixSummary", () => {
         lockPath,
       ),
     ).toBe(
-      "Found 3 duplicate packages in /project/bun.lock, none can be deduped.",
+      "3 duplicate packages in /project/bun.lock.\n" + "None can be deduped.",
     )
   })
 
@@ -222,7 +353,8 @@ describe("formatFixSummary", () => {
         lockPath,
       ),
     ).toBe(
-      "Deduped 14 entries across 3 packages in /project/bun.lock (2 packages cannot be deduped).",
+      "Deduped 14 entries across 3 packages in /project/bun.lock.\n" +
+        "2 packages cannot be deduped.",
     )
   })
 
@@ -238,183 +370,13 @@ describe("formatFixSummary", () => {
         lockPath,
       ),
     ).toBe(
-      "Deduped 1 entry across 1 package in /project/bun.lock (1 package cannot be deduped).",
+      "Deduped 1 entry across 1 package in /project/bun.lock.\n" +
+        "1 package cannot be deduped.",
     )
   })
 })
 
-describe("buildUpdateSummary", () => {
-  function makeCannotDedupeGroup(name: string): DuplicatePackageInfo {
-    return {
-      name,
-      targetVersion: "2.0.0",
-      versions: [
-        {
-          version: "2.0.0",
-          status: "target",
-          requests: [],
-        },
-        {
-          version: "1.0.0",
-          status: "cannot-dedupe",
-          requests: [
-            {
-              requesterNodeId: "blocker",
-              requesterLabel: "blocker",
-              dependencyName: name,
-              range: "^1.0.0",
-              resolvedLockKey: "blocker/dep",
-              resolvedVersion: "1.0.0",
-              requestPath: [],
-            },
-          ],
-        },
-      ],
-    }
-  }
-
-  function makeUpdate(packageName: string, lockKey: string): SuggestedUpdate {
-    return {
-      requesterLockKey: lockKey,
-      packageName,
-      fromVersion: "1.0.0",
-      toVersion: "1.1.0",
-      deduplicates: [
-        { name: "dep", fromVersion: "1.0.0", targetVersion: "2.0.0" },
-      ],
-      constrainedBy: [
-        { requesterLabel: "root", requesterPath: ["root"], range: "^1.0.0" },
-      ],
-    }
-  }
-
-  test("no duplicates", () => {
-    expect(buildUpdateSummary([], [])).toEqual({
-      totalDuplicatePackages: 0,
-      cannotDedupePackages: 0,
-      suggestedUpdateCount: 0,
-      suggestedPackageCount: 0,
-    })
-  })
-
-  test("all can-dedupe, no cannot-dedupe", () => {
-    const groups = makeGroups(3)
-    expect(buildUpdateSummary(groups, [])).toEqual({
-      totalDuplicatePackages: 3,
-      cannotDedupePackages: 0,
-      suggestedUpdateCount: 0,
-      suggestedPackageCount: 0,
-    })
-  })
-
-  test("cannot-dedupe with suggestions", () => {
-    const groups = [
-      ...makeGroups(1),
-      makeCannotDedupeGroup("dep-a"),
-      makeCannotDedupeGroup("dep-b"),
-    ]
-    const updates = [
-      makeUpdate("blocker", "blocker"),
-      makeUpdate("blocker", "plugin/blocker"),
-    ]
-    expect(buildUpdateSummary(groups, updates)).toEqual({
-      totalDuplicatePackages: 3,
-      cannotDedupePackages: 2,
-      suggestedUpdateCount: 2,
-      suggestedPackageCount: 1,
-    })
-  })
-
-  test("cannot-dedupe without suggestions", () => {
-    const groups = [makeCannotDedupeGroup("dep-a")]
-    expect(buildUpdateSummary(groups, [])).toEqual({
-      totalDuplicatePackages: 1,
-      cannotDedupePackages: 1,
-      suggestedUpdateCount: 0,
-      suggestedPackageCount: 0,
-    })
-  })
-})
-
-describe("formatUpdateSummary", () => {
-  test("clean", () => {
-    expect(
-      formatUpdateSummary(
-        {
-          totalDuplicatePackages: 0,
-          cannotDedupePackages: 0,
-          suggestedUpdateCount: 0,
-          suggestedPackageCount: 0,
-        },
-        lockPath,
-      ),
-    ).toBe("All clean — no duplicate packages in /project/bun.lock.")
-  })
-
-  test("all can-dedupe", () => {
-    expect(
-      formatUpdateSummary(
-        {
-          totalDuplicatePackages: 3,
-          cannotDedupePackages: 0,
-          suggestedUpdateCount: 0,
-          suggestedPackageCount: 0,
-        },
-        lockPath,
-      ),
-    ).toBe(
-      "Found 3 duplicate packages in /project/bun.lock, all can be deduped.",
-    )
-  })
-
-  test("cannot-dedupe, no suggestions", () => {
-    expect(
-      formatUpdateSummary(
-        {
-          totalDuplicatePackages: 4,
-          cannotDedupePackages: 2,
-          suggestedUpdateCount: 0,
-          suggestedPackageCount: 0,
-        },
-        lockPath,
-      ),
-    ).toBe(
-      "Found 4 duplicate packages in /project/bun.lock, 2 packages cannot be deduped. No intermediate updates found.",
-    )
-  })
-
-  test("suggestions found", () => {
-    expect(
-      formatUpdateSummary(
-        {
-          totalDuplicatePackages: 5,
-          cannotDedupePackages: 3,
-          suggestedUpdateCount: 2,
-          suggestedPackageCount: 1,
-        },
-        lockPath,
-      ),
-    ).toBe(
-      "Found 5 duplicate packages in /project/bun.lock, 1 intermediate package can be updated to unlock deduplication.",
-    )
-  })
-
-  test("suggestions found, plural packages", () => {
-    expect(
-      formatUpdateSummary(
-        {
-          totalDuplicatePackages: 5,
-          cannotDedupePackages: 3,
-          suggestedUpdateCount: 3,
-          suggestedPackageCount: 2,
-        },
-        lockPath,
-      ),
-    ).toBe(
-      "Found 5 duplicate packages in /project/bun.lock, 2 intermediate packages can be updated to unlock deduplication.",
-    )
-  })
-})
+// --- formatUpdateFixSummary ---
 
 describe("formatUpdateFixSummary", () => {
   test("no change", () => {
@@ -435,7 +397,8 @@ describe("formatUpdateFixSummary", () => {
         lockPath,
       ),
     ).toBe(
-      "No update fixes applied to /project/bun.lock. 3 more packages could be deduped by manually updating 2 intermediate dependencies.",
+      "No update fixes applied to /project/bun.lock.\n" +
+        "3 more packages could be deduped by manually updating 2 intermediate dependencies.",
     )
   })
 
@@ -472,7 +435,8 @@ describe("formatUpdateFixSummary", () => {
         lockPath,
       ),
     ).toBe(
-      "Updated 1 entry across 1 intermediate package and deduped 1 entry across 1 package in /project/bun.lock. 1 more package could be deduped by manually updating 1 intermediate dependency.",
+      "Updated 1 entry across 1 intermediate package and deduped 1 entry across 1 package in /project/bun.lock.\n" +
+        "1 more package could be deduped by manually updating 1 intermediate dependency.",
     )
   })
 })

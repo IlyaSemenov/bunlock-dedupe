@@ -1,0 +1,46 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "myapp",
+      "dependencies": {
+        "intermediary": "^1.0.0",
+        "plugin": "^1.0.0",
+        "ready-lib": "^2.0.0",
+        "blocked-lib": "^2.0.0",
+        "rigid": "^1.0.0",
+        "stuck-lib": "^2.0.0"
+      }
+    }
+  },
+  "packages": {
+    "intermediary": [
+      "intermediary@1.0.0",
+      "",
+      { "dependencies": { "blocked-lib": "^1.0.0" } },
+      "sha"
+    ],
+    "intermediary/blocked-lib": ["blocked-lib@1.5.0", "", {}, "sha"],
+
+    "plugin": [
+      "plugin@1.0.0",
+      "",
+      { "dependencies": { "ready-lib": "^2.0.0" } },
+      "sha"
+    ],
+    "plugin/ready-lib": ["ready-lib@2.0.0", "", {}, "sha"],
+
+    "rigid": [
+      "rigid@1.0.0",
+      "",
+      { "dependencies": { "stuck-lib": "^1.0.0" } },
+      "sha"
+    ],
+    "rigid/stuck-lib": ["stuck-lib@1.0.0", "", {}, "sha"],
+
+    "ready-lib": ["ready-lib@2.1.0", "", {}, "sha"],
+    "blocked-lib": ["blocked-lib@2.1.0", "", {}, "sha"],
+    "stuck-lib": ["stuck-lib@2.0.0", "", {}, "sha"]
+  }
+}

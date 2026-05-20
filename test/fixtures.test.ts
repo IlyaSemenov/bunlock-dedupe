@@ -2,11 +2,10 @@ import { expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 
-import { buildUpdateSummary, formatUpdateSummary } from "../src/cli-messages"
+import { formatReport } from "../src/cli-messages"
 import {
   analyzeDuplicatePackages,
   dedupeLockText,
-  formatDuplicatesReport,
   parseBunLock,
 } from "../src/dedupe"
 import { analyzeDuplicatePackagesWithUpdates } from "../src/dedupe/update-analyze"
@@ -82,6 +81,7 @@ for (const { name, dir, files } of allFixtures) {
     if (hasDedupe) {
       const parsedLock = parseBunLock(lockText)
       const duplicateGroups = analyzeDuplicatePackages(parsedLock)
+      const dedupeResult = dedupeLockText(lockText)
 
       const expectedAll = readFileSync(
         path.join(dir, "report.all.txt"),
@@ -96,29 +96,28 @@ for (const { name, dir, files } of allFixtures) {
         "utf8",
       )
 
-      expect(formatDuplicatesReport(duplicateGroups)).toBe(expectedAll)
+      expect(formatReport(duplicateGroups, dedupeResult, "bun.lock")).toBe(
+        expectedAll,
+      )
       expect(
-        formatDuplicatesReport(duplicateGroups, { fixableOnly: true }),
+        formatReport(duplicateGroups, dedupeResult, "bun.lock", {
+          fixableOnly: true,
+        }),
       ).toBe(expectedFixable)
 
-      const dedupeResult = dedupeLockText(lockText)
       expect(dedupeResult.lockText).toBe(expectedDedupe)
     }
 
     if (hasUpdate) {
       const parsedLock = parseBunLock(lockText)
+      const dedupeResult = dedupeLockText(lockText)
       const fetchFn = makeFixtureFetch(dir)
       const { duplicates, suggestedUpdates } =
         await analyzeDuplicatePackagesWithUpdates(parsedLock, { fetchFn })
 
-      const fullOutput = [
-        formatDuplicatesReport(duplicates, { suggestedUpdates }),
-        "",
-        formatUpdateSummary(
-          buildUpdateSummary(duplicates, suggestedUpdates),
-          "bun.lock",
-        ),
-      ].join("\n")
+      const fullOutput = formatReport(duplicates, dedupeResult, "bun.lock", {
+        suggestedUpdates,
+      })
 
       const expected = readFileSync(
         path.join(dir, "report.update.txt"),

@@ -102,7 +102,10 @@ app-blocking
     - myapp: ^1.0.0
   👉 shared-dep: 1.5.0 → 2.1.0
 
-Found 1 duplicate package in /project/bun.lock, 1 intermediate package can be updated to unlock deduplication.
+1 duplicate package in /project/bun.lock.
+1 intermediate package can be updated to unlock deduplication.
+
+Run with --update --fix to update intermediate packages and apply dedupes.
 ```
 
 Each suggestion shows the package to update, the version bump, the inbound ranges that allow that update, and which locked dependency versions would be deduped after the update.
