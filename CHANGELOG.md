@@ -1,5 +1,17 @@
 # bunlock-dedupe
 
+## 1.4.0
+
+### Minor Changes
+
+- 879a2cf: Add `--update`, `--update --fix`, and `--offline` flags to find intermediate dependency updates that unlock deduplication. Offline mode is analysis-only because Bun's package cache does not include registry integrity metadata needed for safe lockfile rewrites.
+- e283d65: Replace `--fixable` with `--all` and invert default to fixable-only output.
+
+### Patch Changes
+
+- cf767f3: Fix transitive orphan detection with iterative orphan propagation.
+- eaa9cb9: Improve summary CTA texts.
+
 ## 1.3.1
 
 ### Patch Changes
