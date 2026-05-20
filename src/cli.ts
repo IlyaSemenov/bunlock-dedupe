@@ -25,12 +25,10 @@ import { readBunLock } from "./read-bun-lock"
 const commandName = "bunlock-dedupe"
 
 function printUsage(): void {
-  console.log(
-    `${commandName} [path] [--fixable | --fix] [--update [--offline]]`,
-  )
+  console.log(`${commandName} [path] [--all] [--fix] [--update [--offline]]`)
   console.log("")
   console.log("Analyze duplicate bun.lock sub-dependencies.")
-  console.log("Use --fixable to show only fixable packages and versions.")
+  console.log("Use --all to also show packages that cannot be deduped.")
   console.log("Use --fix to rewrite dedupe-compatible entries.")
   console.log(
     "Use --update to find intermediate dep updates that unlock deduplication.",
@@ -66,7 +64,7 @@ function buildSkippedUpdateSummary(updates: SuggestedUpdate[]): {
 async function run(): Promise<void> {
   let values: {
     fix: boolean
-    fixable: boolean
+    all: boolean
     help: boolean
     update: boolean
     offline: boolean
@@ -84,7 +82,7 @@ async function run(): Promise<void> {
           short: "f",
           default: false,
         },
-        fixable: {
+        all: {
           type: "boolean",
           default: false,
         },
@@ -150,7 +148,7 @@ async function run(): Promise<void> {
       console.log(
         formatReportOutput(
           formatDuplicatesReport(duplicates, {
-            fixableOnly: values.fixable,
+            includeUnfixable: values.all,
             suggestedUpdates,
             skippedUpdates: result.skippedUpdates,
           }),
@@ -179,7 +177,7 @@ async function run(): Promise<void> {
 
     console.log(
       formatReport(duplicates, dedupeResult, lockPath, {
-        fixableOnly: values.fixable,
+        includeUnfixable: values.all,
         suggestedUpdates,
         skippedUpdates: (
           await classifyUpdateSafety(lockText, suggestedUpdates, {
@@ -197,7 +195,7 @@ async function run(): Promise<void> {
     const dedupeResult = dedupeLockText(lockText)
     console.log(
       formatReport(duplicateGroups, dedupeResult, lockPath, {
-        fixableOnly: values.fixable,
+        includeUnfixable: values.all,
       }),
     )
     return

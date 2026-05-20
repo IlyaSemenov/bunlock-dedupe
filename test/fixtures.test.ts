@@ -96,12 +96,14 @@ for (const { name, dir, files } of allFixtures) {
         "utf8",
       )
 
-      expect(formatReport(duplicateGroups, dedupeResult, "bun.lock")).toBe(
-        expectedAll,
-      )
       expect(
         formatReport(duplicateGroups, dedupeResult, "bun.lock", {
-          fixableOnly: true,
+          includeUnfixable: true,
+        }),
+      ).toBe(expectedAll)
+      expect(
+        formatReport(duplicateGroups, dedupeResult, "bun.lock", {
+          includeUnfixable: false,
         }),
       ).toBe(expectedFixable)
 

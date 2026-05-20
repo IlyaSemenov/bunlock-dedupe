@@ -20,7 +20,7 @@ export function formatReport(
   dedupeResult: { rewrittenPackages: number; touchedEntries: number },
   lockPath: string,
   options?: {
-    fixableOnly?: boolean
+    includeUnfixable?: boolean
     suggestedUpdates?: SuggestedUpdate[]
     skippedUpdates?: SuggestedUpdate[]
   },
@@ -31,7 +31,7 @@ export function formatReport(
     options?.suggestedUpdates,
   )
   const body = formatDuplicatesReport(duplicates, {
-    fixableOnly: options?.fixableOnly,
+    includeUnfixable: options?.includeUnfixable,
     suggestedUpdates: options?.suggestedUpdates,
     skippedUpdates: options?.skippedUpdates,
   })

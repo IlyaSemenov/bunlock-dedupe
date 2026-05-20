@@ -11,8 +11,8 @@ Related Bun issue: [Deduplicate / dedupe command for bun install #1343](https://
 Run in any directory with a `bun.lock` file:
 
 ```bash
-bunx bunlock-dedupe                     # show all duplicates
-bunx bunlock-dedupe --fixable           # show only fixable duplicates
+bunx bunlock-dedupe                     # show fixable duplicates
+bunx bunlock-dedupe --all               # show all duplicates, including unfixable
 bunx bunlock-dedupe --fix               # rewrite the lockfile
 bunx bunlock-dedupe --update            # find updates that unlock deduplication
 bunx bunlock-dedupe --update --fix      # apply those updates and dedupe
@@ -28,9 +28,9 @@ bunx bunlock-dedupe /path/to/bun.lock --fix
 
 ## What each mode does
 
-**No flags** — scans the lockfile and lists every package that appears in more than one version. For each, it shows the package name, the versions found, and the full dependency path that pulled in each version (so you can see which package required what).
+**No flags** — scans the lockfile and shows packages where deduplication is possible. Marks the version that will be kept (`✅`), the versions that can be upgraded to it (`⬆️`), and orphan versions (`🗑️`) that will be removed when the parent is deduped.
 
-**`--fixable`** — same scan, but only shows packages where deduplication is actually possible. Marks the version that will be kept (`✅`), the versions that can be upgraded to it (`⬆️`), and orphan versions (`🗑️`) that will be removed when the parent is deduped.
+**`--all`** — also shows packages that cannot be deduped (marked `❌`), for the full picture.
 
 **`--fix`** — rewrites the lockfile, upgrading every dedupe-compatible version to the highest version that all their semver ranges allow.
 

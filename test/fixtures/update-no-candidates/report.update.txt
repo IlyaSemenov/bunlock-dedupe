@@ -1,8 +1,4 @@
-shared-dep
-  ✅ 2.1.0
-    - myapp: ^2.0.0
-  ❌ 1.5.0
-    - myapp > app-blocking: ^1.0.0
+No fixable duplicate packages found in bun.lock.
 
 1 duplicate package in bun.lock.
 1 package cannot be deduped.

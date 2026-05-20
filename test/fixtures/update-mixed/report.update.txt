@@ -10,12 +10,6 @@ ready-lib
   ⬆️ 2.0.0 → 2.1.0
     - myapp > plugin: ^2.0.0
 
-stuck-lib
-  ✅ 2.0.0
-    - myapp: ^2.0.0
-  ❌ 1.0.0
-    - myapp > rigid: ^1.0.0
-
 intermediary
   ⬆️ 1.0.0 → 1.1.0
     - myapp: ^1.0.0

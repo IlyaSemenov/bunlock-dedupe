@@ -212,7 +212,7 @@ describe("analyzeDuplicatePackagesWithUpdates", () => {
 
     expect(
       formatDuplicatesReport(duplicates, {
-        fixableOnly: true,
+        includeUnfixable: false,
         suggestedUpdates,
         skippedUpdates: suggestedUpdates,
       }),

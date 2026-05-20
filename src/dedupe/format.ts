@@ -27,7 +27,7 @@ function formatVersionLine(versionInfo: DuplicateVersionInfo): string {
 }
 
 type FormatDuplicatesReportOptions = {
-  fixableOnly?: boolean
+  includeUnfixable?: boolean
   suggestedUpdates?: SuggestedUpdate[]
   skippedUpdates?: SuggestedUpdate[]
 }
@@ -143,7 +143,7 @@ export function formatDuplicatesReport(
   duplicates: DuplicatePackageInfo[],
   options?: FormatDuplicatesReportOptions,
 ): string {
-  const fixableOnly = options?.fixableOnly ?? false
+  const includeUnfixable = options?.includeUnfixable ?? false
   const suggestedUpdates = options?.suggestedUpdates ?? []
   const skippedUpdates = options?.skippedUpdates ?? []
   const skippedUpdateIds = new Set(skippedUpdates.map(updateIdentity))
@@ -156,8 +156,9 @@ export function formatDuplicatesReport(
       ? rewriteCannotDedupeAsOrphan(duplicates, appliedUpdates)
       : duplicates
 
-  const filteredDuplicates = fixableOnly
+  const filteredDuplicates = includeUnfixable
     ? transformedDuplicates
+    : transformedDuplicates
         .filter((duplicate) =>
           duplicate.versions.some(
             (version) =>
@@ -176,7 +177,6 @@ export function formatDuplicatesReport(
             versions,
           }
         })
-    : transformedDuplicates
 
   const lines: string[] = []
 
@@ -237,9 +237,9 @@ export function formatDuplicatesReport(
   }
 
   if (lines.length === 0) {
-    return fixableOnly
-      ? "No fixable duplicate packages found in bun.lock."
-      : "No duplicate packages found in bun.lock."
+    return includeUnfixable
+      ? "No duplicate packages found in bun.lock."
+      : "No fixable duplicate packages found in bun.lock."
   }
 
   return lines.join("\n").trimEnd()
