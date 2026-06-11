@@ -1,5 +1,15 @@
 # bunlock-dedupe
 
+## 1.5.0
+
+### Minor Changes
+
+- 717f394: Inline update suggestions into per-version `used by` / `removed after` sections and explain held-back updates (✋) with their constraining ranges and reasons.
+
+### Patch Changes
+
+- ab56162: Remove nested entries that became redundant after rewrites.
+
 ## 1.4.0
 
 ### Minor Changes
