@@ -43,29 +43,39 @@ Use `--offline` to analyze only the local bun cache instead of the registry. `--
 Each duplicate package is listed with its versions. Here is what every status means:
 
 ```text
-typescript
+typescript:
   ✅ 5.8.3
-    - myapp: ^5.8.0
+    used by:
+      - myapp: ^5.8.0
   ⬆️ 5.6.2 → 5.8.3
-    - myapp > ts-jest: ^5.6.0
+    used by:
+      - myapp > ts-jest: ^5.6.0
 
-react
+react:
   ✅ 19.1.0
-    - myapp: ^19.0.0
+    used by:
+      - myapp: ^19.0.0
   ❌ 18.3.1
-    - myapp > react-pdf: ^18.0.0
+    used by:
+      - myapp > react-pdf: ^18.0.0
 
-@types/node
+@types/node:
   ✅ 22.13.0
-    - myapp: ^22.0.0
+    used by:
+      - myapp: ^22.0.0
   ⬆️ 20.18.0 → 22.13.0
-    - myapp > bun-types: *
+    used by:
+      - myapp > bun-types: *
 
-undici-types
+undici-types:
   ✅ 7.16.0
-    - myapp > @types/node: ~7.16.0
+    used by:
+      - myapp > @types/node: ~7.16.0
   🗑️ 5.28.5
-    - myapp > bun-types > @types/node ⬆️: ~5.26.0
+    used by:
+      - myapp > bun-types > @types/node: ~5.26.0
+    removed after:
+      - @types/node: 20.18.0 → 22.13.0
 ```
 
 | Icon | Meaning |
@@ -73,7 +83,8 @@ undici-types
 | ✅ | **Target** — the version that will be kept |
 | ⬆️ | **Can dedupe** — can be upgraded to the target; `--fix` will do this automatically |
 | ❌ | **Cannot dedupe** — requires a version incompatible with the target; needs manual resolution |
-| 🗑️ | **Orphan** — will become unreachable once its parent (marked ⬆️ in the path) is deduped; no action needed |
+| 🗑️ | **Orphan** — will become unreachable after the package listed in `removed after` is deduped, updated, or removed; no action needed |
+| ✋ | **Manual update** — an intermediate package update could remove this version, but `--update --fix` cannot safely apply it automatically |
 | ❓ | **Unknown** — uses a non-semver range (e.g. `catalog:`, `workspace:`) that cannot be checked automatically |
 
 ## How deduplication works
@@ -91,16 +102,15 @@ bunlock-dedupe --update
 ```
 
 ```text
-shared-dep
+shared-dep:
   ✅ 2.1.0
-    - myapp: ^2.0.0
+    used by:
+      - myapp: ^2.0.0
   🗑️ 1.5.0
-    - myapp > app-blocking ⬆️: ^1.0.0
-
-app-blocking
-  ⬆️ 1.0.0 → 1.1.0
-    - myapp: ^1.0.0
-  👉 shared-dep: 1.5.0 → 2.1.0
+    used by:
+      - myapp > app-blocking: ^1.0.0
+    removed after:
+      - app-blocking: 1.0.0 → 1.1.0
 
 1 duplicate package in /project/bun.lock.
 1 intermediate package can be updated to unlock deduplication.
@@ -108,4 +118,16 @@ app-blocking
 Run with --update --fix to update intermediate packages and apply dedupes.
 ```
 
-Each suggestion shows the package to update, the version bump, the inbound ranges that allow that update, and which locked dependency versions would be deduped after the update.
+Update suggestions are shown inline under the duplicate version they would remove.
+If an update is found but cannot be safely applied by `--update --fix`, the duplicate version is marked `✋` and lists the manual update that would remove it, along with the inbound ranges that constrain the update and the reason it cannot be applied automatically:
+
+```text
+shared-dep:
+  ✋ 1.5.0 → 2.1.0
+    used by:
+      - myapp > app-blocking: ^1.0.0
+    can be removed after manual update:
+      - app-blocking: 1.0.0 → 1.1.0
+        required by: myapp: ^1.0.0
+        held back: update adds dependencies missing from the lockfile
+```

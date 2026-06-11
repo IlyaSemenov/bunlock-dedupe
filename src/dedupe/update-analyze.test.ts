@@ -210,13 +210,21 @@ describe("analyzeDuplicatePackagesWithUpdates", () => {
         fetchFn: registry,
       })
 
-    expect(
-      formatDuplicatesReport(duplicates, {
-        includeUnfixable: false,
-        suggestedUpdates,
-        skippedUpdates: suggestedUpdates,
-      }),
-    ).toContain("⏩ 1.0.0 → 1.1.0 (manual update required)")
+    const report = formatDuplicatesReport(duplicates, {
+      includeUnfixable: false,
+      suggestedUpdates,
+      skippedUpdates: suggestedUpdates.map((update) => ({
+        ...update,
+        skipReason: "new-dependencies" as const,
+      })),
+    })
+    expect(report).toContain("✋ 1.5.0 → 2.1.0")
+    expect(report).toContain("can be removed after manual update:")
+    expect(report).toContain("- app-blocking: 1.0.0 → 1.1.0")
+    expect(report).toContain("required by: myapp: ^1.0.0")
+    expect(report).toContain(
+      "held back: update adds dependencies missing from the lockfile",
+    )
   })
 
   test("returns no suggestions when no compatible newer version exists", async () => {

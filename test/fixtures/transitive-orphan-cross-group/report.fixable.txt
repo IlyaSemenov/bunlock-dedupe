@@ -1,24 +1,35 @@
-framework
+framework:
   ✅ 2.0.5
-    - example: ^2.0.0
+    used by:
+      - example: ^2.0.0
   ⬆️ 2.0.0 → 2.0.5
-    - example > plugin: ^2.0.0
+    used by:
+      - example > plugin: ^2.0.0
 
-renderer
+renderer:
   ✅ 2.0.5
-    - example: ^2.0.0
-    - example > framework: 2.0.5
+    used by:
+      - example: ^2.0.0
+      - example > framework: 2.0.5
   🗑️ 2.0.0
-    - example > plugin > framework ⬆️: 2.0.0
+    used by:
+      - example > plugin > framework: 2.0.0
+    removed after:
+      - framework: 2.0.0 → 2.0.5
 
-utils
+utils:
   ✅ 2.0.5
-    - example: ^2.0.0
-    - example > framework: 2.0.5
-    - example > renderer: 2.0.5
+    used by:
+      - example: ^2.0.0
+      - example > framework: 2.0.5
+      - example > renderer: 2.0.5
   🗑️ 2.0.0
-    - example > plugin > framework ⬆️: 2.0.0
-    - example > plugin > framework > renderer: 2.0.0
+    used by:
+      - example > plugin > framework: 2.0.0
+      - example > plugin > framework > renderer: 2.0.0
+    removed after:
+      - framework: 2.0.0 → 2.0.5
+      - renderer: 2.0.0 is removed
 
 3 duplicate packages in bun.lock.
 1 package can be deduped.

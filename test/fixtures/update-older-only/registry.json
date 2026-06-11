@@ -1,10 +1,17 @@
 {
-  "versions": { "app-blocking": ["0.9.0", "1.0.0"] },
+  "versions": {
+    "app-blocking": ["0.9.0", "1.0.0"]
+  },
   "metadata": {
     "app-blocking": {
       "0.9.0": {
         "version": "0.9.0",
-        "dependencies": { "shared-dep": "^2.0.0" }
+        "dependencies": {
+          "shared-dep": "^2.0.0"
+        },
+        "dist": {
+          "integrity": "sha512-fixture-0.9.0"
+        }
       }
     }
   }

@@ -16,7 +16,9 @@ export type {
 } from "./update-analyze"
 export { analyzeDuplicatePackagesWithUpdates } from "./update-analyze"
 export type {
+  SkippedUpdate,
   UpdateAndDedupeLockResult,
   UpdateSafetyResult,
+  UpdateSkipReason,
 } from "./update-fix"
 export { classifyUpdateSafety, updateAndDedupeLockText } from "./update-fix"

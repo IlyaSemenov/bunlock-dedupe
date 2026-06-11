@@ -1,8 +1,10 @@
-gamma-lib
+gamma-lib:
   ✅ 1.5.4
-    - sandbox: ^1.5.0
+    used by:
+      - sandbox: ^1.5.0
   ⬆️ 1.4.8 → 1.5.4
-    - sandbox > app-a: ^1.4.0
+    used by:
+      - sandbox > app-a: ^1.4.0
 
 3 duplicate packages in bun.lock.
 1 package can be deduped.

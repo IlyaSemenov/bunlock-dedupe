@@ -21,7 +21,6 @@ export type DependencyRequest = {
   resolvedLockKey: string
   resolvedVersion: string
   requestPath: string[]
-  requesterWillBeRewritten?: boolean
 }
 
 export type DependencyGraph = {
@@ -766,20 +765,6 @@ export function analyzeDuplicatePackages(
     rewrites: collectVersionRewrites(duplicates),
     templates: collectTemplateLockKeys(packagesByLockKey),
     packagesByLockKey,
-  }
-
-  for (const request of graph.requests) {
-    const requesterPackage = packagesByLockKey.get(request.requesterNodeId)
-    if (!requesterPackage) {
-      continue
-    }
-
-    const targetVersion = orphanDetectionContext.rewrites
-      .get(requesterPackage.name)
-      ?.get(requesterPackage.version)
-    request.requesterWillBeRewritten = Boolean(
-      targetVersion && targetVersion !== requesterPackage.version,
-    )
   }
 
   const duplicateStatuses = collectDuplicateStatuses(duplicates)

@@ -1,10 +1,13 @@
-shared-lib
+shared-lib:
   ✅ 1.5.2
-    - @mono/app1: ^1.5.0
+    used by:
+      - @mono/app1: ^1.5.0
   ⬆️ 1.4.9 → 1.5.2
-    - @mono/app2: ^1.4.0
+    used by:
+      - @mono/app2: ^1.4.0
   ❌ 1.4.3
-    - @mono/app3: 1.4.3
+    used by:
+      - @mono/app3: 1.4.3
 
 1 duplicate package in bun.lock.
 1 package can be deduped.

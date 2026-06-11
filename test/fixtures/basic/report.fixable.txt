@@ -1,8 +1,10 @@
-demo-lib
+demo-lib:
   ✅ 3.17.4
-    - example: ^3.17.0
+    used by:
+      - example: ^3.17.0
   ⬆️ 3.16.8 → 3.17.4
-    - example > app-can: ^3.15.2
+    used by:
+      - example > app-can: ^3.15.2
 
 1 duplicate package in bun.lock.
 1 package can be deduped.

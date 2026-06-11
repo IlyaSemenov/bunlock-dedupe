@@ -1,20 +1,22 @@
-dep-a
+dep-a:
   ✅ 2.1.0
-    - myapp: ^2.0.0
+    used by:
+      - myapp: ^2.0.0
   🗑️ 1.5.0
-    - myapp > app-blocking ⬆️: ^1.0.0
+    used by:
+      - myapp > app-blocking: ^1.0.0
+    removed after:
+      - app-blocking: 1.0.0 → 1.1.0
 
-dep-b
+dep-b:
   ✅ 2.1.0
-    - myapp: ^2.0.0
+    used by:
+      - myapp: ^2.0.0
   🗑️ 1.5.0
-    - myapp > app-blocking ⬆️: ^1.0.0
-
-app-blocking
-  ⬆️ 1.0.0 → 1.1.0
-    - myapp: ^1.0.0
-  👉 dep-a: 1.5.0 → 2.1.0
-  👉 dep-b: 1.5.0 → 2.1.0
+    used by:
+      - myapp > app-blocking: ^1.0.0
+    removed after:
+      - app-blocking: 1.0.0 → 1.1.0
 
 2 duplicate packages in bun.lock.
 1 intermediate package can be updated to unlock deduplication.

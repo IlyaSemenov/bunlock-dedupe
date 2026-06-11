@@ -1,10 +1,18 @@
 {
-  "versions": { "app-blocking": ["1.0.0", "1.1.0"] },
+  "versions": {
+    "app-blocking": ["1.0.0", "1.1.0"]
+  },
   "metadata": {
     "app-blocking": {
       "1.1.0": {
         "version": "1.1.0",
-        "dependencies": { "dep-a": "^2.0.0", "dep-b": "^2.0.0" }
+        "dependencies": {
+          "dep-a": "^2.0.0",
+          "dep-b": "^2.0.0"
+        },
+        "dist": {
+          "integrity": "sha512-fixture-1.1.0"
+        }
       }
     }
   }

@@ -1,9 +1,11 @@
-utils
+utils:
   ✅ 2.1.0
-    - example > app-b: ^2.0.0
+    used by:
+      - example > app-b: ^2.0.0
   ❌ 1.2.0
-    - example > app-a: ^1.0.0
-    - example > app-c: ^1.0.0
+    used by:
+      - example > app-a: ^1.0.0
+      - example > app-c: ^1.0.0
 
 1 duplicate package in bun.lock.
 1 package cannot be deduped.

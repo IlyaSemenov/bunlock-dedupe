@@ -1,10 +1,13 @@
-@vueuse/core
+@vueuse/core:
   ✅ 14.1.0
-    - example > @nuxt/ui: ^14.1.0
+    used by:
+      - example > @nuxt/ui: ^14.1.0
   ❌ 12.8.2
-    - example > reka-ui: ^12.5.0
+    used by:
+      - example > reka-ui: ^12.5.0
   ❌ 10.11.1
-    - example > vaul-vue: ^10.8.0
+    used by:
+      - example > vaul-vue: ^10.8.0
 
 1 duplicate package in bun.lock.
 1 package cannot be deduped.

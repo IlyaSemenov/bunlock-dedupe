@@ -14,6 +14,16 @@ import {
   type UpdateAnalysisOptions,
 } from "./update-analyze"
 
+export type UpdateSkipReason =
+  | "not-in-lockfile"
+  | "metadata-unavailable"
+  | "no-integrity"
+  | "new-dependencies"
+
+export type SkippedUpdate = SuggestedUpdate & {
+  skipReason: UpdateSkipReason
+}
+
 export type UpdateAndDedupeLockResult = {
   changed: boolean
   lockText: string
@@ -23,12 +33,12 @@ export type UpdateAndDedupeLockResult = {
   dedupedPackages: number
   suggestedUpdates: SuggestedUpdate[]
   appliedUpdates: SuggestedUpdate[]
-  skippedUpdates: SuggestedUpdate[]
+  skippedUpdates: SkippedUpdate[]
 }
 
 export type UpdateSafetyResult = {
   applicableUpdates: SuggestedUpdate[]
-  skippedUpdates: SuggestedUpdate[]
+  skippedUpdates: SkippedUpdate[]
 }
 
 type ApplicableUpdate = {
@@ -128,16 +138,16 @@ async function assessSuggestedUpdates(
   options?: UpdateAnalysisOptions,
 ): Promise<{
   applicableUpdates: ApplicableUpdate[]
-  skippedUpdates: SuggestedUpdate[]
+  skippedUpdates: SkippedUpdate[]
 }> {
   const applicableUpdates: ApplicableUpdate[] = []
-  const skippedUpdates: SuggestedUpdate[] = []
+  const skippedUpdates: SkippedUpdate[] = []
   const specsByLockKey = collectPackageSpecs(packages)
 
   for (const update of updates) {
     const entry = packages[update.requesterLockKey]
     if (!isPackageEntry(entry)) {
-      skippedUpdates.push(update)
+      skippedUpdates.push({ ...update, skipReason: "not-in-lockfile" })
       continue
     }
 
@@ -153,18 +163,18 @@ async function assessSuggestedUpdates(
       },
     )
     if (!meta) {
-      skippedUpdates.push(update)
+      skippedUpdates.push({ ...update, skipReason: "metadata-unavailable" })
       continue
     }
 
     const [, resolved] = entry
     const nextIntegrity = meta.dist?.integrity
     if (!nextIntegrity) {
-      skippedUpdates.push(update)
+      skippedUpdates.push({ ...update, skipReason: "no-integrity" })
       continue
     }
     if (!canReuseExistingDependencyEntries(meta, specsByLockKey)) {
-      skippedUpdates.push(update)
+      skippedUpdates.push({ ...update, skipReason: "new-dependencies" })
       continue
     }
 

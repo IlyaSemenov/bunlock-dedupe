@@ -28,6 +28,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 0,
       readyPackages: 0,
       intermediatePackages: 0,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 0,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -40,6 +42,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 3,
       readyPackages: 3,
       intermediatePackages: 0,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 0,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -55,6 +59,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 1,
       readyPackages: 1,
       intermediatePackages: 0,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 0,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -70,6 +76,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 5,
       readyPackages: 3,
       intermediatePackages: 0,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 2,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -86,6 +94,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 3,
       readyPackages: 0,
       intermediatePackages: 0,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 3,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -99,6 +109,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 1,
       readyPackages: 0,
       intermediatePackages: 0,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 1,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -112,6 +124,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 2,
       readyPackages: 0,
       intermediatePackages: 1,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 0,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -127,6 +141,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 5,
       readyPackages: 2,
       intermediatePackages: 1,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 0,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -144,6 +160,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 7,
       readyPackages: 2,
       intermediatePackages: 1,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 2,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -162,6 +180,8 @@ describe("formatReportSummary", () => {
       totalDuplicatePackages: 3,
       readyPackages: 0,
       intermediatePackages: 1,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
       cannotDedupePackages: 1,
     }
     expect(formatReportSummary(summary, lockPath)).toBe(
@@ -170,6 +190,21 @@ describe("formatReportSummary", () => {
         "1 package cannot be deduped.\n" +
         "\n" +
         "Run with --update --fix to update intermediate packages and apply dedupes.",
+    )
+  })
+
+  test("manual updates only — no --update --fix CTA", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 1,
+      readyPackages: 0,
+      intermediatePackages: 0,
+      manualUpdatePackages: 1,
+      manualUpdateDedupePackages: 1,
+      cannotDedupePackages: 0,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "1 duplicate package in /project/bun.lock.\n" +
+        "1 package can be deduped by manually updating 1 intermediate dependency.",
     )
   })
 })

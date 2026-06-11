@@ -1,10 +1,17 @@
 {
-  "versions": { "intermediary": ["1.0.0", "1.1.0"] },
+  "versions": {
+    "intermediary": ["1.0.0", "1.1.0"]
+  },
   "metadata": {
     "intermediary": {
       "1.1.0": {
         "version": "1.1.0",
-        "dependencies": { "blocked-lib": "^2.0.0" }
+        "dependencies": {
+          "blocked-lib": "^2.0.0"
+        },
+        "dist": {
+          "integrity": "sha512-fixture-1.1.0"
+        }
       }
     }
   }

@@ -1,24 +1,31 @@
-alpha-lib
+alpha-lib:
   ✅ 3.0.2
-    - sandbox: ^3.0.0
-    - sandbox > app-b: ^3.0.0
+    used by:
+      - sandbox: ^3.0.0
+      - sandbox > app-b: ^3.0.0
   ❌ 2.9.9
-    - sandbox > app-a: ^2.8.0
+    used by:
+      - sandbox > app-a: ^2.8.0
 
-beta-lib
+beta-lib:
   ✅ 2.2.3
-    - sandbox: ^2.2.0
-    - sandbox > app-b: ^2.0.0
+    used by:
+      - sandbox: ^2.2.0
+      - sandbox > app-b: ^2.0.0
   ❌ 2.1.7
-    - sandbox > app-a: ~2.1.0
+    used by:
+      - sandbox > app-a: ~2.1.0
 
-gamma-lib
+gamma-lib:
   ✅ 1.5.4
-    - sandbox: ^1.5.0
+    used by:
+      - sandbox: ^1.5.0
   ⬆️ 1.4.8 → 1.5.4
-    - sandbox > app-a: ^1.4.0
+    used by:
+      - sandbox > app-a: ^1.4.0
   ❌ 1.4.3
-    - sandbox > app-c: ~1.4.0
+    used by:
+      - sandbox > app-c: ~1.4.0
 
 3 duplicate packages in bun.lock.
 1 package can be deduped.

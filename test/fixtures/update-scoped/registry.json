@@ -1,10 +1,17 @@
 {
-  "versions": { "@scope/plugin": ["1.0.0", "1.1.0"] },
+  "versions": {
+    "@scope/plugin": ["1.0.0", "1.1.0"]
+  },
   "metadata": {
     "@scope/plugin": {
       "1.1.0": {
         "version": "1.1.0",
-        "dependencies": { "shared-dep": "^2.0.0" }
+        "dependencies": {
+          "shared-dep": "^2.0.0"
+        },
+        "dist": {
+          "integrity": "sha512-fixture-1.1.0"
+        }
       }
     }
   }

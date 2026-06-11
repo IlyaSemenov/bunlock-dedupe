@@ -1,0 +1,14 @@
+shared-dep:
+  ✅ 2.1.0
+    used by:
+      - myapp: ^2.0.0
+  ✋ 1.5.0 → 2.1.0
+    used by:
+      - myapp > app-blocking: ^1.0.0
+    can be removed after manual update:
+      - app-blocking: 1.0.0 → 1.1.0
+        required by: myapp: ^1.0.0
+        held back: update adds dependencies missing from the lockfile
+
+1 duplicate package in bun.lock.
+1 package can be deduped by manually updating 1 intermediate dependency.

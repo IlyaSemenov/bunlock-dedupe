@@ -1,6 +1,7 @@
 import type { DuplicatePackageInfo } from "./dedupe/analyze"
-import { formatDuplicatesReport } from "./dedupe/format"
+import { formatDuplicatesReport, updateIdentity } from "./dedupe/format"
 import type { SuggestedUpdate } from "./dedupe/update-analyze"
+import type { SkippedUpdate } from "./dedupe/update-fix"
 
 function plural(count: number, one: string, many: string): string {
   return count === 1 ? `${count} ${one}` : `${count} ${many}`
@@ -12,7 +13,7 @@ export function formatReportOutput(
   reportBody: string,
   summary: string,
 ): string {
-  return reportBody + "\n\n" + summary
+  return `${reportBody}\n\n${summary}`
 }
 
 export function formatReport(
@@ -22,13 +23,14 @@ export function formatReport(
   options?: {
     includeUnfixable?: boolean
     suggestedUpdates?: SuggestedUpdate[]
-    skippedUpdates?: SuggestedUpdate[]
+    skippedUpdates?: SkippedUpdate[]
   },
 ): string {
   const summary = buildReportSummary(
     duplicates,
     dedupeResult,
     options?.suggestedUpdates,
+    options?.skippedUpdates,
   )
   const body = formatDuplicatesReport(duplicates, {
     includeUnfixable: options?.includeUnfixable,
@@ -44,6 +46,8 @@ export type ReportSummary = {
   totalDuplicatePackages: number
   readyPackages: number
   intermediatePackages: number
+  manualUpdatePackages: number
+  manualUpdateDedupePackages: number
   cannotDedupePackages: number
 }
 
@@ -51,11 +55,21 @@ export function buildReportSummary(
   duplicateGroups: DuplicatePackageInfo[],
   dedupeResult: { rewrittenPackages: number; touchedEntries: number },
   suggestedUpdates?: SuggestedUpdate[],
+  skippedUpdates?: SkippedUpdate[],
 ): ReportSummary {
   const readyPackages = dedupeResult.rewrittenPackages
-  const intermediatePackages = suggestedUpdates
-    ? new Set(suggestedUpdates.map((u) => u.packageName)).size
-    : 0
+  const skippedUpdateIds = new Set((skippedUpdates ?? []).map(updateIdentity))
+  const appliedUpdates = (suggestedUpdates ?? []).filter(
+    (update) => !skippedUpdateIds.has(updateIdentity(update)),
+  )
+  const intermediatePackages = new Set(appliedUpdates.map((u) => u.packageName))
+    .size
+  const manualUpdatePackages = new Set(
+    (skippedUpdates ?? []).map((u) => u.packageName),
+  ).size
+  const manualUpdateDedupePackages = new Set(
+    (skippedUpdates ?? []).flatMap((u) => u.deduplicates.map((d) => d.name)),
+  ).size
   const cannotDedupePackages = suggestedUpdates
     ? countCannotDedupePackages(duplicateGroups, suggestedUpdates)
     : duplicateGroups.length - readyPackages
@@ -64,6 +78,8 @@ export function buildReportSummary(
     totalDuplicatePackages: duplicateGroups.length,
     readyPackages,
     intermediatePackages,
+    manualUpdatePackages,
+    manualUpdateDedupePackages,
     cannotDedupePackages,
   }
 }
@@ -90,6 +106,12 @@ export function formatReportSummary(
   if (summary.intermediatePackages > 0) {
     lines.push(
       `${plural(summary.intermediatePackages, "intermediate package", "intermediate packages")} can be updated to unlock deduplication.`,
+    )
+  }
+
+  if (summary.manualUpdatePackages > 0) {
+    lines.push(
+      `${plural(summary.manualUpdateDedupePackages, "package", "packages")} can be deduped by manually updating ${plural(summary.manualUpdatePackages, "intermediate dependency", "intermediate dependencies")}.`,
     )
   }
 

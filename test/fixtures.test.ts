@@ -5,6 +5,7 @@ import path from "node:path"
 import { formatReport } from "../src/cli-messages"
 import {
   analyzeDuplicatePackages,
+  classifyUpdateSafety,
   dedupeLockText,
   parseBunLock,
 } from "../src/dedupe"
@@ -116,9 +117,15 @@ for (const { name, dir, files } of allFixtures) {
       const fetchFn = makeFixtureFetch(dir)
       const { duplicates, suggestedUpdates } =
         await analyzeDuplicatePackagesWithUpdates(parsedLock, { fetchFn })
+      const { skippedUpdates } = await classifyUpdateSafety(
+        lockText,
+        suggestedUpdates,
+        { fetchFn },
+      )
 
       const fullOutput = formatReport(duplicates, dedupeResult, "bun.lock", {
         suggestedUpdates,
+        skippedUpdates,
       })
 
       const expected = readFileSync(
