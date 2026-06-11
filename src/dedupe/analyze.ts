@@ -1,7 +1,12 @@
 import semver from "semver"
 
 import type { BunLockFile, BunPackageMeta } from "./parse"
-import { normalizeDependencyMap, parseResolvedSpec } from "./parse"
+import {
+  isPackageEntry,
+  normalizeDependencyMap,
+  packageEntryMeta,
+  parseResolvedSpec,
+} from "./parse"
 import { compareStrings } from "./utils"
 
 export type ResolvedPackage = {
@@ -196,19 +201,17 @@ function collectResolvedPackages(
   const resolved = new Map<string, ResolvedPackage>()
 
   for (const [lockKey, entry] of Object.entries(lock.packages ?? {})) {
-    if (!Array.isArray(entry) || typeof entry[0] !== "string") {
+    if (!isPackageEntry(entry)) {
       continue
     }
 
-    const parsedSpec = parseResolvedSpec(entry[0])
+    const [spec] = entry
+    const parsedSpec = parseResolvedSpec(spec)
     if (!parsedSpec) {
       continue
     }
 
-    const metadata =
-      typeof entry[2] === "object" && entry[2] !== null
-        ? (entry[2] as BunPackageMeta)
-        : {}
+    const metadata = packageEntryMeta(entry) ?? {}
 
     resolved.set(lockKey, {
       lockKey,

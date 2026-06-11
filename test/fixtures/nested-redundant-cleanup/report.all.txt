@@ -1,0 +1,22 @@
+pathe:
+  ✅ 2.0.3
+    used by:
+      - myapp: ^2.0.0
+      - myapp > color-lib > kit: ^2.0.0
+  ❌ 1.1.2
+    used by:
+      - myapp > color-lib: ^1.0.0
+
+ws:
+  ✅ 8.21.0
+    used by:
+      - myapp > lib-a: ^8.21.0
+  ⬆️ 8.19.0 → 8.21.0
+    used by:
+      - myapp: ^8.0.0
+
+2 duplicate packages in bun.lock.
+1 package can be deduped.
+1 package cannot be deduped.
+
+Run with --fix to apply available dedupes.

@@ -4,7 +4,12 @@ import { fetchCompatibleVersions, fetchPackageMetadata } from "../registry"
 import type { DuplicatePackageInfo } from "./analyze"
 import { analyzeDuplicatePackages, evaluateRangeCompatibility } from "./analyze"
 import type { BunLockFile } from "./parse"
-import { normalizeDependencyMap, parseResolvedSpec } from "./parse"
+import {
+  isPackageEntry,
+  normalizeDependencyMap,
+  packageEntryMeta,
+  parseResolvedSpec,
+} from "./parse"
 
 type VersionUnlock = {
   name: string
@@ -117,9 +122,10 @@ function collectPackageNamesByLockKey(lock: BunLockFile): Map<string, string> {
   const namesByLockKey = new Map<string, string>()
 
   for (const [lockKey, entry] of Object.entries(lock.packages ?? {})) {
-    if (!Array.isArray(entry) || typeof entry[0] !== "string") continue
+    if (!isPackageEntry(entry)) continue
 
-    const parsed = parseResolvedSpec(entry[0])
+    const [spec] = entry
+    const parsed = parseResolvedSpec(spec)
     if (!parsed) continue
 
     namesByLockKey.set(lockKey, parsed.name)
@@ -287,9 +293,8 @@ function collectInboundRanges(
   }
 
   for (const [entryLockKey, entry] of Object.entries(lock.packages ?? {})) {
-    if (!Array.isArray(entry) || typeof entry[0] !== "string") continue
-    const meta =
-      typeof entry[2] === "object" && entry[2] !== null ? entry[2] : {}
+    if (!isPackageEntry(entry)) continue
+    const meta = packageEntryMeta(entry) ?? {}
     const allDeps = {
       ...normalizeDependencyMap(meta.dependencies),
       ...normalizeDependencyMap(meta.optionalDependencies),

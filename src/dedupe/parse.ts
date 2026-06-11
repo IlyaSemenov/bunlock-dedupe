@@ -20,7 +20,12 @@ export type BunPackageMeta = {
   cpu?: string | string[]
 }
 
-export type BunPackageEntry = [string, string?, BunPackageMeta?, string?]
+export type BunPackageEntry = [
+  spec: string,
+  resolved?: string,
+  meta?: BunPackageMeta,
+  integrity?: string,
+]
 
 export type BunLockFile = {
   lockfileVersion?: number
@@ -31,6 +36,17 @@ export type BunLockFile = {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
+}
+
+export function isPackageEntry(value: unknown): value is BunPackageEntry {
+  return Array.isArray(value) && typeof value[0] === "string"
+}
+
+export function packageEntryMeta(
+  entry: BunPackageEntry,
+): BunPackageMeta | undefined {
+  const meta = entry[2]
+  return isObject(meta) ? (meta as BunPackageMeta) : undefined
 }
 
 export function normalizeDependencyMap(value: unknown): DependencyMap {

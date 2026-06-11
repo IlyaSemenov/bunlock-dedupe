@@ -3,6 +3,7 @@ import semver from "semver"
 import { fetchPackageMetadata, type PackageMetadata } from "../registry"
 import type { BunPackageEntry, BunPackageMeta } from "./parse"
 import {
+  isPackageEntry,
   normalizeDependencyMap,
   parseBunLock,
   parseResolvedSpec,
@@ -77,10 +78,6 @@ function collectOptionalPeerNames(meta: PackageMetadata): Set<string> {
   return optionalPeers
 }
 
-function isPackageEntry(value: unknown): value is BunPackageEntry {
-  return Array.isArray(value) && typeof value[0] === "string"
-}
-
 function collectPackageSpecs(
   packages: Record<string, BunPackageEntry>,
 ): Map<string, { name: string; version: string }> {
@@ -89,7 +86,8 @@ function collectPackageSpecs(
   for (const [lockKey, entry] of Object.entries(packages)) {
     if (!isPackageEntry(entry)) continue
 
-    const parsed = parseResolvedSpec(entry[0])
+    const [spec] = entry
+    const parsed = parseResolvedSpec(spec)
     if (!parsed) continue
 
     specsByLockKey.set(lockKey, parsed)

@@ -2,6 +2,8 @@ import { analyzeDuplicatePackages, type DuplicatePackageInfo } from "./analyze"
 import {
   type BunLockFile,
   type BunPackageEntry,
+  isPackageEntry,
+  packageEntryMeta,
   parseBunLock,
   parseResolvedSpec,
 } from "./parse"
@@ -50,11 +52,12 @@ function collectPackageIndex(packages: Record<string, BunPackageEntry>): {
   const rootVersions = new Map<string, string>()
 
   for (const [lockKey, entry] of Object.entries(packages)) {
-    if (!Array.isArray(entry) || typeof entry[0] !== "string") {
+    if (!isPackageEntry(entry)) {
       continue
     }
 
-    const parsed = parseResolvedSpec(entry[0])
+    const [spec] = entry
+    const parsed = parseResolvedSpec(spec)
     if (!parsed) {
       continue
     }
@@ -76,6 +79,118 @@ function collectPackageIndex(packages: Record<string, BunPackageEntry>): {
   return { templates, rootVersions }
 }
 
+function resolveFallbackLockKey(
+  packages: Record<string, BunPackageEntry>,
+  requesterLockKey: string,
+  dependencyName: string,
+  excludedKey: string,
+): string | undefined {
+  let bestCandidate: string | undefined
+  let bestPrefixLength = -1
+  for (const key of Object.keys(packages)) {
+    if (key === excludedKey || !key.endsWith(`/${dependencyName}`)) {
+      continue
+    }
+
+    const prefix = key.slice(0, -(dependencyName.length + 1))
+    if (
+      requesterLockKey === prefix ||
+      requesterLockKey.startsWith(`${prefix}/`)
+    ) {
+      if (prefix.length > bestPrefixLength) {
+        bestCandidate = key
+        bestPrefixLength = prefix.length
+      }
+    }
+  }
+  if (bestCandidate) {
+    return bestCandidate
+  }
+
+  return Object.hasOwn(packages, dependencyName) ? dependencyName : undefined
+}
+
+function entryDependencyNames(entry: BunPackageEntry): string[] {
+  const meta = packageEntryMeta(entry)
+  if (!meta) return []
+
+  return Object.keys({
+    ...meta.dependencies,
+    ...meta.optionalDependencies,
+    ...meta.peerDependencies,
+  })
+}
+
+function resolvesSameDependencies(
+  packages: Record<string, BunPackageEntry>,
+  entry: BunPackageEntry,
+  nestedKey: string,
+  fallbackKey: string,
+): boolean {
+  return entryDependencyNames(entry).every(
+    (depName) =>
+      resolveFallbackLockKey(packages, nestedKey, depName, "") ===
+      resolveFallbackLockKey(packages, fallbackKey, depName, ""),
+  )
+}
+
+/**
+ * Remove nested entries that became redundant after rewrites: when a nested
+ * entry resolves to exactly the same package entry that its requester would
+ * get anyway (e.g. the root entry was rewritten up to the nested version),
+ * `bun install` prunes it — so should we. Only safe when both contexts also
+ * resolve every dependency of the entry to the same lock key.
+ */
+function pruneRedundantNestedEntries(
+  packages: Record<string, BunPackageEntry>,
+): { prunedEntries: number; prunedPackageNames: Set<string> } {
+  let prunedEntries = 0
+  const prunedPackageNames = new Set<string>()
+  let changed = true
+
+  while (changed) {
+    changed = false
+
+    for (const lockKey of Object.keys(packages)) {
+      const entry = packages[lockKey]
+      if (!isPackageEntry(entry)) continue
+
+      const [spec] = entry
+      const parsed = parseResolvedSpec(spec)
+      if (!parsed || lockKey === parsed.name) continue
+      if (!lockKey.endsWith(`/${parsed.name}`)) continue
+
+      const childPrefix = `${lockKey}/`
+      if (Object.keys(packages).some((key) => key.startsWith(childPrefix))) {
+        continue
+      }
+
+      const requesterLockKey = lockKey.slice(0, -(parsed.name.length + 1))
+      const fallbackKey = resolveFallbackLockKey(
+        packages,
+        requesterLockKey,
+        parsed.name,
+        lockKey,
+      )
+      if (!fallbackKey) continue
+
+      const fallbackEntry = packages[fallbackKey]
+      if (!isPackageEntry(fallbackEntry)) continue
+      if (JSON.stringify(fallbackEntry) !== JSON.stringify(entry)) continue
+      if (!resolvesSameDependencies(packages, entry, lockKey, fallbackKey)) {
+        continue
+      }
+
+      delete packages[lockKey]
+      prunedEntries += 1
+      prunedPackageNames.add(parsed.name)
+      changed = true
+    }
+  }
+
+  return { prunedEntries, prunedPackageNames }
+}
+
 function rewriteEntries(
   packages: Record<string, BunPackageEntry>,
   rewrites: RewriteByPackage,
@@ -86,11 +201,12 @@ function rewriteEntries(
 
   for (const lockKey of Object.keys(packages)) {
     const entry = packages[lockKey]
-    if (!Array.isArray(entry) || typeof entry[0] !== "string") {
+    if (!isPackageEntry(entry)) {
       continue
     }
 
-    const parsed = parseResolvedSpec(entry[0])
+    const [entrySpec] = entry
+    const parsed = parseResolvedSpec(entrySpec)
     if (!parsed) {
       continue
     }
@@ -129,6 +245,14 @@ function rewriteEntries(
     ] as BunPackageEntry
     touchedEntries += 1
     touchedPackageNames.add(parsed.name)
+  }
+
+  if (touchedEntries > 0) {
+    const pruneResult = pruneRedundantNestedEntries(packages)
+    touchedEntries += pruneResult.prunedEntries
+    for (const name of pruneResult.prunedPackageNames) {
+      touchedPackageNames.add(name)
+    }
   }
 
   return {
