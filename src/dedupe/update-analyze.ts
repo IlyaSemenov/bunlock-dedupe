@@ -1,6 +1,10 @@
 import semver from "semver"
 
-import { fetchCompatibleVersions, fetchPackageMetadata } from "../registry"
+import {
+  fetchCompatibleVersions,
+  fetchPackageMetadata,
+  type PackumentCache,
+} from "../registry"
 import type { DuplicatePackageInfo } from "./analyze"
 import { analyzeDuplicatePackages, evaluateRangeCompatibility } from "./analyze"
 import type { BunLockFile } from "./parse"
@@ -18,6 +22,19 @@ type VersionUnlock = {
 }
 
 /**
+ * A single semver range that constrains updates to a blocking package.
+ *
+ * Each entry comes from a parent (workspace or dependent package) whose own
+ * dependency range must remain satisfied by the chosen `toVersion`.
+ */
+type InboundRangeConstraint = {
+  /** Report label for the parent constraint, e.g. `myapp (workspace)` or `vite`. */
+  requesterLabel: string
+  requesterPath: string[]
+  range: string
+}
+
+/**
  * A package update that could remove one or more `cannot-dedupe` versions.
  *
  * `requesterLockKey` is the intermediate package entry to update; `constrainedBy`
@@ -32,11 +49,7 @@ export type SuggestedUpdate = {
   /** Duplicate versions expected to become removable after this update. */
   deduplicates: VersionUnlock[]
   /** Inbound parent/workspace ranges that the selected `toVersion` satisfies. */
-  constrainedBy: Array<{
-    requesterLabel: string
-    requesterPath: string[]
-    range: string
-  }>
+  constrainedBy: InboundRangeConstraint[]
 }
 
 export type UpdateAnalysisResult = {
@@ -55,6 +68,11 @@ export type UpdateAnalysisOptions = {
   ) => Promise<Response>
   readDirFn?: (path: string) => string[]
   readFileFn?: (path: string) => string
+  /**
+   * Shared packument cache. When omitted, each call uses its own cache; pass a
+   * single Map to share network results across analyze + safety passes.
+   */
+  cache?: PackumentCache
 }
 
 /**
@@ -67,11 +85,7 @@ type RequesterInfo = {
   packageName: string
   fromVersion: string
   /** Ranges from parents/workspaces that constrain possible updates. */
-  inboundRanges: Array<{
-    requesterLabel: string
-    requesterPath: string[]
-    range: string
-  }>
+  inboundRanges: InboundRangeConstraint[]
   /** Duplicate package names currently blocked by this requester. */
   blockedDuplicateNames: string[]
 }
@@ -213,10 +227,7 @@ function resolveDependencyLockKey(
 }
 
 function addInboundRange(
-  inboundByLockKey: Map<
-    string,
-    Array<{ requesterLabel: string; requesterPath: string[]; range: string }>
-  >,
+  inboundByLockKey: Map<string, InboundRangeConstraint[]>,
   lockKey: string,
   requesterLabel: string,
   requesterPath: string[],
@@ -309,14 +320,8 @@ function collectInboundRanges(
   requesterMap: Map<string, RequesterInfo>,
   duplicates: DuplicatePackageInfo[],
   lock: BunLockFile,
-): Map<
-  string,
-  Array<{ requesterLabel: string; requesterPath: string[]; range: string }>
-> {
-  const inboundByLockKey = new Map<
-    string,
-    Array<{ requesterLabel: string; requesterPath: string[]; range: string }>
-  >()
+): Map<string, InboundRangeConstraint[]> {
+  const inboundByLockKey = new Map<string, InboundRangeConstraint[]>()
   const namesByLockKey = collectPackageNamesByLockKey(lock)
   const requesterPaths = collectRequesterPaths(duplicates)
 
@@ -404,10 +409,7 @@ function collectInboundRanges(
 /** Drop requesters that either have no blocked duplicates or no usable ranges. */
 function pruneUnsuggestible(
   requesterMap: Map<string, RequesterInfo>,
-  inboundByLockKey: Map<
-    string,
-    Array<{ requesterLabel: string; requesterPath: string[]; range: string }>
-  >,
+  inboundByLockKey: Map<string, InboundRangeConstraint[]>,
   duplicates: DuplicatePackageInfo[],
 ): void {
   for (const [lockKey, info] of requesterMap) {
@@ -444,6 +446,8 @@ async function findBestCandidate(
     cacheDir: options?.cacheDir,
     fetchFn: options?.fetchFn,
     readDirFn: options?.readDirFn,
+    readFileFn: options?.readFileFn,
+    cache: options?.cache,
   })
 
   const newerCandidates = candidates.filter(
@@ -460,6 +464,7 @@ async function findBestCandidate(
       fetchFn: options?.fetchFn,
       readDirFn: options?.readDirFn,
       readFileFn: options?.readFileFn,
+      cache: options?.cache,
     })
     if (!meta) continue
 

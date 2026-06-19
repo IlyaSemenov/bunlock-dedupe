@@ -1,6 +1,10 @@
 import semver from "semver"
 
-import { fetchPackageMetadata, type PackageMetadata } from "../registry"
+import {
+  createPackumentCache,
+  fetchPackageMetadata,
+  type PackageMetadata,
+} from "../registry"
 import type { BunPackageEntry, BunPackageMeta } from "./parse"
 import {
   isPackageEntry,
@@ -186,6 +190,7 @@ async function assessSuggestedUpdates(
         fetchFn: options?.fetchFn,
         readDirFn: options?.readDirFn,
         readFileFn: options?.readFileFn,
+        cache: options?.cache,
       },
     )
     if (!meta) {
@@ -272,10 +277,13 @@ export async function updateAndDedupeLockText(
   lockText: string,
   options?: UpdateAnalysisOptions,
 ): Promise<UpdateAndDedupeLockResult> {
+  const cache = options?.cache ?? createPackumentCache()
+  const sharedOptions: UpdateAnalysisOptions = { ...options, cache }
+
   const parsedLock = parseBunLock(lockText)
   const { suggestedUpdates } = await analyzeDuplicatePackagesWithUpdates(
     parsedLock,
-    options,
+    sharedOptions,
   )
   const packages = parsedLock.packages ?? {}
   parsedLock.packages = packages
@@ -283,7 +291,7 @@ export async function updateAndDedupeLockText(
   const assessment = await assessSuggestedUpdates(
     packages,
     suggestedUpdates,
-    options,
+    sharedOptions,
   )
   const updateResult = applyApplicableUpdates(
     packages,

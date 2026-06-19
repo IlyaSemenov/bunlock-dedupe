@@ -40,6 +40,21 @@ function makeReadFile(files: Record<string, string>): (path: string) => string {
   }
 }
 
+/**
+ * Build a readFileFn that returns a minimal `package.json` for any Bun cache
+ * layout (index dir or canonical direct dir), deriving the version from the
+ * directory name. Used by offline tests that only care about version listing.
+ */
+function makeReadPackageJsonFromPath(): (path: string) => string {
+  return (path: string) => {
+    if (!path.endsWith("/package.json")) throw new Error(`ENOENT: ${path}`)
+    const match = path.match(/([^/]+)@@@\d+\/package\.json$/)
+    if (!match) throw new Error(`ENOENT: ${path}`)
+    const version = (match[1] ?? "").replace(/^[^@]+@/, "")
+    return JSON.stringify({ version })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // fetchCompatibleVersions — online
 // ---------------------------------------------------------------------------
@@ -138,6 +153,7 @@ describe("fetchCompatibleVersions (online)", () => {
 
 describe("fetchCompatibleVersions (offline)", () => {
   const cacheDir = "/fake/cache"
+  const readFileFn = makeReadPackageJsonFromPath()
 
   test("reads versions from cache dirs, sorted descending", async () => {
     const result = await fetchCompatibleVersions("pkg", {
@@ -147,6 +163,7 @@ describe("fetchCompatibleVersions (offline)", () => {
       readDirFn: makeReadDir({
         "/fake/cache/pkg": ["1.0.0@@@1", "1.1.0@@@1", "2.0.0@@@1"],
       }),
+      readFileFn,
     })
     expect(result).toEqual(["1.1.0", "1.0.0"])
   })
@@ -159,6 +176,7 @@ describe("fetchCompatibleVersions (offline)", () => {
       readDirFn: makeReadDir({
         "/fake/cache/pkg": ["1.0.0@@@1", "1.1.0@@@2", "1.2.0@@@3"],
       }),
+      readFileFn,
     })
     expect(result).toEqual(["1.2.0", "1.1.0", "1.0.0"])
   })
@@ -171,6 +189,7 @@ describe("fetchCompatibleVersions (offline)", () => {
       readDirFn: makeReadDir({
         "/fake/cache/@scope/pkg": ["1.0.0@@@1", "1.1.0@@@1"],
       }),
+      readFileFn,
     })
     expect(result).toEqual(["1.1.0", "1.0.0"])
   })
@@ -188,6 +207,7 @@ describe("fetchCompatibleVersions (offline)", () => {
           "other@1.9.0@@@1",
         ],
       }),
+      readFileFn,
     })
     expect(result).toEqual(["1.1.0", "1.0.0"])
   })
@@ -204,6 +224,7 @@ describe("fetchCompatibleVersions (offline)", () => {
           "other@1.9.0@@@1",
         ],
       }),
+      readFileFn,
     })
     expect(result).toEqual(["1.1.0", "1.0.0"])
   })
@@ -214,6 +235,7 @@ describe("fetchCompatibleVersions (offline)", () => {
       offline: true,
       cacheDir,
       readDirFn: makeReadDir({}),
+      readFileFn,
     })
     expect(result).toEqual([])
   })
@@ -226,6 +248,7 @@ describe("fetchCompatibleVersions (offline)", () => {
       readDirFn: makeReadDir({
         "/fake/cache/pkg": ["1.0.0@@@1", "some-other-dir", "1.1.0@@@1"],
       }),
+      readFileFn,
     })
     expect(result).toEqual(["1.1.0", "1.0.0"])
   })
@@ -245,7 +268,7 @@ describe("fetchPackageMetadata (online)", () => {
   test("returns metadata for a package version", async () => {
     const result = await fetchPackageMetadata("pkg", "1.1.0", {
       fetchFn: makeFetch({
-        "https://registry.npmjs.org/pkg/1.1.0": meta,
+        "https://registry.npmjs.org/pkg": { versions: { "1.1.0": meta } },
       }),
     })
     expect(result).toEqual(meta)
@@ -272,10 +295,12 @@ describe("fetchPackageMetadata (online)", () => {
     await fetchPackageMetadata("@scope/pkg", "1.0.0", {
       fetchFn: (async (input: string | URL | Request) => {
         calledUrl = typeof input === "string" ? input : input.toString()
-        return new Response(JSON.stringify(meta), { status: 200 })
+        return new Response(JSON.stringify({ versions: { "1.0.0": meta } }), {
+          status: 200,
+        })
       }) as FetchFn,
     })
-    expect(calledUrl).toBe("https://registry.npmjs.org/@scope%2Fpkg/1.0.0")
+    expect(calledUrl).toBe("https://registry.npmjs.org/@scope%2Fpkg")
   })
 })
 

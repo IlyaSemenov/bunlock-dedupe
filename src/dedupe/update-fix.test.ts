@@ -20,26 +20,24 @@ function makeRegistry(
       ? decoded.indexOf("/", decoded.indexOf("/") + 1)
       : decoded.indexOf("/")
 
-    if (slashIdx === -1) {
-      const versions = versionsByPackage[decoded]
-      if (!versions) return new Response(null, { status: 404 })
-
-      return new Response(
-        JSON.stringify({
-          versions: Object.fromEntries(
-            versions.map((version) => [version, {}]),
-          ),
-        }),
-        { status: 200 },
-      )
+    if (slashIdx !== -1) {
+      // Packument requests must hit the package root, not a per-version URL.
+      return new Response(null, { status: 404 })
     }
 
-    const pkgName = decoded.slice(0, slashIdx)
-    const version = decoded.slice(slashIdx + 1)
-    const meta = metadataByPackageVersion[pkgName]?.[version]
-    if (!meta) return new Response(null, { status: 404 })
+    const pkgName = decoded
+    const versions = versionsByPackage[pkgName]
+    if (!versions) return new Response(null, { status: 404 })
 
-    return new Response(JSON.stringify(meta), { status: 200 })
+    const versionsObj: Record<string, PackageMetadata> = {}
+    for (const version of versions) {
+      versionsObj[version] = metadataByPackageVersion[pkgName]?.[version] ?? {
+        version,
+      }
+    }
+    return new Response(JSON.stringify({ versions: versionsObj }), {
+      status: 200,
+    })
   }
 }
 

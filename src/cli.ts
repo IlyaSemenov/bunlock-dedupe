@@ -21,6 +21,7 @@ import {
   updateAndDedupeLockText,
 } from "./dedupe"
 import { readBunLock } from "./read-bun-lock"
+import { createPackumentCache } from "./registry"
 
 const commandName = "bunlock-dedupe"
 
@@ -132,14 +133,17 @@ async function run(): Promise<void> {
   const parsedLock = parseBunLock(lockText)
 
   if (values.update) {
+    const cache = createPackumentCache()
     const { duplicates, suggestedUpdates } =
       await analyzeDuplicatePackagesWithUpdates(parsedLock, {
         offline: values.offline,
+        cache,
       })
 
     if (values.fix) {
       const result = await updateAndDedupeLockText(lockText, {
         offline: values.offline,
+        cache,
       })
       if (result.changed) {
         writeFileSync(lockPath, result.lockText, "utf8")
@@ -182,6 +186,7 @@ async function run(): Promise<void> {
         skippedUpdates: (
           await classifyUpdateSafety(lockText, suggestedUpdates, {
             offline: values.offline,
+            cache,
           })
         ).skippedUpdates,
       }),

@@ -19,6 +19,38 @@ export type PackageMetadata = {
   }
 }
 
+type Packument = {
+  versions?: Record<string, PackageMetadata>
+}
+
+/**
+ * Packument cache shared across analyze and safety passes within one run.
+ *
+ * Stores the in-flight {@link Packument} fetch per package so concurrent
+ * callers (e.g. `Promise.all` over blocking requesters that resolve to the
+ * same package name) share one network request, and later passes read from
+ * the cache instead of refetching. Pass the same instance to multiple calls
+ * ({@link fetchCompatibleVersions}, {@link fetchPackageMetadata}, the
+ * orchestrators in `./dedupe`).
+ */
+export type PackumentCache = Map<string, Promise<Packument | null>>
+
+export function createPackumentCache(): PackumentCache {
+  return new Map()
+}
+
+type RegistryOptions = {
+  offline?: boolean
+  cacheDir?: string
+  fetchFn?: (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => Promise<Response>
+  readDirFn?: (path: string) => string[]
+  readFileFn?: (path: string) => string
+  cache?: PackumentCache
+}
+
 function encodePackageNameForRegistryPath(packageName: string): string {
   if (packageName.startsWith("@")) {
     const slashIndex = packageName.indexOf("/")
@@ -116,21 +148,96 @@ function readCacheEntries(
   return entries
 }
 
+/**
+ * Fetch the abbreviated registry packument for `packageName`, with caching.
+ *
+ * Online: a single GET to `/packageName` with the abbreviated install-v1 Accept
+ * returns every version plus per-version metadata in one response. Offline:
+ * the packument is reconstructed from the local Bun cache.
+ *
+ * The in-flight promise is stored in `options.cache` immediately so concurrent
+ * callers (e.g. several `Promise.all` branches that resolve to the same
+ * package name) share one network request. Only confirmed outcomes are kept:
+ * 200 OK packuments and 404 misses stay cached; transient failures (network
+ * errors, 5xx, malformed JSON) evict themselves so the next call retries
+ * instead of being poisoned for the rest of the run.
+ */
+async function fetchPackument(
+  packageName: string,
+  options: RegistryOptions,
+): Promise<Packument | null> {
+  const { cache } = options
+  const existing = cache?.get(packageName)
+  if (existing) return existing
+
+  const promise = (async (): Promise<Packument | null> => {
+    let result: Packument | null = null
+    let cacheable = true
+
+    if (options.offline) {
+      const {
+        readDirFn = readdirSync,
+        readFileFn = (p) => readFileSync(p, "utf8"),
+      } = options
+      const cacheDir = options.cacheDir ?? defaultCacheDir()
+      const versions: Record<string, PackageMetadata> = {}
+      for (const entry of readCacheEntries(packageName, cacheDir, readDirFn)) {
+        if (versions[entry.version]) continue
+        try {
+          const raw = readFileFn(join(entry.packagePath, "package.json"))
+          // Trust the cache dir name as the version key; the package.json
+          // inside may be stale or mismatched in unusual layouts.
+          versions[entry.version] = JSON.parse(raw) as PackageMetadata
+        } catch {
+          // Stale index dirs and unreadable entries are skipped.
+        }
+      }
+      result = Object.keys(versions).length > 0 ? { versions } : null
+    } else {
+      const fetchImpl = options.fetchFn ?? fetch
+      const encodedName = encodePackageNameForRegistryPath(packageName)
+      try {
+        const response = await fetchImpl(
+          `https://registry.npmjs.org/${encodedName}`,
+          { headers: { Accept: "application/vnd.npm.install-v1+json" } },
+        )
+        if (response.ok) {
+          try {
+            result = (await response.json()) as Packument
+          } catch {
+            // Malformed JSON — treat as transient so the next call retries.
+            cacheable = false
+          }
+        } else if (response.status === 404) {
+          result = null
+        } else {
+          // 5xx, rate limits, etc. — retryable on a subsequent call.
+          cacheable = false
+        }
+      } catch {
+        // Network failure — retryable on a subsequent call.
+        cacheable = false
+      }
+    }
+
+    if (!cacheable && cache) {
+      // Evict our own in-flight entry so the next caller retries instead of
+      // observing a transient failure as a permanent miss.
+      cache.delete(packageName)
+    }
+
+    return result
+  })()
+
+  cache?.set(packageName, promise)
+  return promise
+}
+
 export async function fetchCompatibleVersions(
   packageName: string,
-  options: {
-    ranges: string[]
-    offline?: boolean
-    cacheDir?: string
-    fetchFn?: (
-      input: string | URL | Request,
-      init?: RequestInit,
-    ) => Promise<Response>
-    readDirFn?: (path: string) => string[]
-  },
+  options: { ranges: string[] } & RegistryOptions,
 ): Promise<string[]> {
-  const { ranges, offline, readDirFn = readdirSync } = options
-  const cacheDir = options.cacheDir ?? defaultCacheDir()
+  const { ranges } = options
 
   const satisfiesAllRanges = (version: string): boolean => {
     if (!semver.valid(version)) return false
@@ -141,82 +248,17 @@ export async function fetchCompatibleVersions(
     })
   }
 
-  if (offline) {
-    const versions: string[] = []
-    for (const entry of readCacheEntries(packageName, cacheDir, readDirFn)) {
-      if (satisfiesAllRanges(entry.version)) {
-        versions.push(entry.version)
-      }
-    }
-    return [...new Set(versions)].sort((a, b) => semver.rcompare(a, b))
-  }
-
-  const fetchImpl = options.fetchFn ?? fetch
-  const encodedName = encodePackageNameForRegistryPath(packageName)
-  try {
-    const response = await fetchImpl(
-      `https://registry.npmjs.org/${encodedName}`,
-      { headers: { Accept: "application/vnd.npm.install-v1+json" } },
-    )
-    if (!response.ok) return []
-    const data = (await response.json()) as {
-      versions?: Record<string, unknown>
-    }
-    const allVersions = Object.keys(data.versions ?? {})
-    return allVersions
-      .filter(satisfiesAllRanges)
-      .sort((a, b) => semver.rcompare(a, b))
-  } catch {
-    return []
-  }
+  const packument = await fetchPackument(packageName, options)
+  return Object.keys(packument?.versions ?? {})
+    .filter(satisfiesAllRanges)
+    .sort((a, b) => semver.rcompare(a, b))
 }
 
 export async function fetchPackageMetadata(
   packageName: string,
   version: string,
-  options: {
-    offline?: boolean
-    cacheDir?: string
-    fetchFn?: (
-      input: string | URL | Request,
-      init?: RequestInit,
-    ) => Promise<Response>
-    readDirFn?: (path: string) => string[]
-    readFileFn?: (path: string) => string
-  },
+  options: RegistryOptions,
 ): Promise<PackageMetadata | null> {
-  const {
-    offline,
-    readDirFn = readdirSync,
-    readFileFn = (p) => readFileSync(p, "utf8"),
-  } = options
-  const cacheDir = options.cacheDir ?? defaultCacheDir()
-
-  if (offline) {
-    for (const entry of readCacheEntries(packageName, cacheDir, readDirFn)) {
-      if (entry.version !== version) continue
-
-      try {
-        const pkgJsonPath = join(entry.packagePath, "package.json")
-        const raw = readFileFn(pkgJsonPath)
-        return JSON.parse(raw) as PackageMetadata
-      } catch {
-        // Try the next cache entry; index dirs may contain stale symlinks.
-      }
-    }
-
-    return null
-  }
-
-  const fetchImpl = options.fetchFn ?? fetch
-  const encodedName = encodePackageNameForRegistryPath(packageName)
-  try {
-    const response = await fetchImpl(
-      `https://registry.npmjs.org/${encodedName}/${version}`,
-    )
-    if (!response.ok) return null
-    return (await response.json()) as PackageMetadata
-  } catch {
-    return null
-  }
+  const packument = await fetchPackument(packageName, options)
+  return packument?.versions?.[version] ?? null
 }

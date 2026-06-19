@@ -1,3 +1,4 @@
+export type { PackageMetadata, PackumentCache } from "../registry"
 export type {
   DependencyRequest,
   DuplicatePackageInfo,

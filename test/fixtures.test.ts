@@ -39,22 +39,24 @@ function makeFixtureFetch(fixtureDir: string) {
       ? decoded.indexOf("/", decoded.indexOf("/") + 1)
       : decoded.indexOf("/")
 
-    if (slashIdx === -1) {
-      const pkgName = decoded
-      const versions = registry.versions[pkgName]
-      if (!versions) return new Response(null, { status: 404 })
-      const versionsObj: Record<string, unknown> = {}
-      for (const v of versions) versionsObj[v] = {}
-      return new Response(JSON.stringify({ versions: versionsObj }), {
-        status: 200,
-      })
+    if (slashIdx !== -1) {
+      // Packument requests must hit the package root, not a per-version URL.
+      return new Response(null, { status: 404 })
     }
 
-    const pkgName = decoded.slice(0, slashIdx)
-    const version = decoded.slice(slashIdx + 1)
-    const meta = registry.metadata[pkgName]?.[version]
-    if (!meta) return new Response(null, { status: 404 })
-    return new Response(JSON.stringify(meta), { status: 200 })
+    const pkgName = decoded
+    const versions = registry.versions[pkgName]
+    if (!versions) return new Response(null, { status: 404 })
+
+    const versionsObj: Record<string, PackageMetadata> = {}
+    for (const version of versions) {
+      versionsObj[version] = registry.metadata[pkgName]?.[version] ?? {
+        version,
+      }
+    }
+    return new Response(JSON.stringify({ versions: versionsObj }), {
+      status: 200,
+    })
   }
 }
 
