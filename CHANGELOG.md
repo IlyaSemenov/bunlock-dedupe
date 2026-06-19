@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.5.1
+
+### Patch Changes
+
+- aa1a530: Fix dedupe fixpoint cleanup so `--fix` removes newly unlocked and unreachable lock entries without requiring a second `bun install`.
+
 ## 1.5.0
 
 ### Minor Changes
