@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.5.2
+
+### Patch Changes
+
+- 0be4684: Fix leaking bundled metadata when reusing lockfile entries.
+
 ## 1.5.1
 
 ### Patch Changes
