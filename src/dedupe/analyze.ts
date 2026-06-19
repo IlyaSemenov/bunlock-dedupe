@@ -10,7 +10,9 @@ import {
 import { compareStrings } from "./utils"
 
 export type ResolvedPackage = {
+  /** Lockfile key, e.g. `react` or `some-parent/react`. */
   lockKey: string
+  /** Real npm package name parsed from the tuple spec. */
   name: string
   version: string
   dependencies: BunPackageMeta["dependencies"]
@@ -18,16 +20,34 @@ export type ResolvedPackage = {
   peerDependencies: BunPackageMeta["peerDependencies"]
 }
 
+/**
+ * One concrete dependency edge after Bun lock-key resolution.
+ *
+ * `requesterNodeId` may be either a package lock key or a synthetic workspace
+ * node id. `resolvedLockKey` is always the package entry that satisfies the
+ * request in the current lockfile.
+ */
 export type DependencyRequest = {
+  /** Package lock key or synthetic `workspace:*` node that declares the range. */
   requesterNodeId: string
+  /** Human-readable requester label used in reports, e.g. `myapp (workspace)` or `vite`. */
   requesterLabel: string
   dependencyName: string
+  /** Declared dependency range exactly as it appears in package metadata. */
   range: string
+  /** Lock key selected by the lockfile resolver for this request. */
   resolvedLockKey: string
   resolvedVersion: string
+  /** Display path from a workspace to the requester; populated after graph build. */
   requestPath: string[]
 }
 
+/**
+ * Resolved dependency graph used for both reporting and safety checks.
+ *
+ * The graph keeps package entries and workspaces in one node space so request
+ * paths can explain how a duplicate version is reached from a workspace.
+ */
 export type DependencyGraph = {
   rootNodeId: string
   workspaceNodeIds: string[]
@@ -36,6 +56,12 @@ export type DependencyGraph = {
   requests: DependencyRequest[]
 }
 
+/**
+ * Classification of a duplicate version relative to the highest usable target.
+ *
+ * `orphan` means the version may be incompatible by itself, but every path to
+ * it disappears after another dedupe rewrite.
+ */
 export type DedupeStatus =
   | "target"
   | "can-dedupe"
@@ -45,13 +71,24 @@ export type DedupeStatus =
 
 export type DuplicateVersionInfo = {
   version: string
+  /** How this version can be treated relative to the package group's targets. */
   status: DedupeStatus
+  /** Version to rewrite to when `status` is `can-dedupe`. */
   dedupeTargetVersion?: string
+  /** Requests that resolve to this exact version. */
   requests: DependencyRequest[]
 }
 
+/**
+ * Duplicate package group with one or more resolved versions.
+ *
+ * `targetVersion` is the highest version seen in the lockfile; lower versions
+ * can still become secondary `target` rows when they are needed by lower
+ * versions that cannot jump to the highest target.
+ */
 export type DuplicatePackageInfo = {
   name: string
+  /** Highest version seen in the lockfile for this package name. */
   targetVersion: string
   versions: DuplicateVersionInfo[]
 }
@@ -65,6 +102,15 @@ type OrphanDetectionContext = {
   packagesByLockKey: Map<string, ResolvedPackage>
 }
 
+/**
+ * Resolve a dependency the way Bun lock keys are structured:
+ * nearest nested `requester/dependency` wins, then root `dependency`, then the
+ * closest ancestor-provided nested entry.
+ *
+ * @param requesterLockKey Package lock key that owns the dependency. Use
+ * `undefined` for workspace/root resolution.
+ * @param dependencyName Real npm package name being resolved.
+ */
 function resolveDependencyLockKey(
   requesterLockKey: string | undefined,
   dependencyName: string,
@@ -228,6 +274,12 @@ function collectResolvedPackages(
   return resolved
 }
 
+/**
+ * Build the request graph from workspaces and package metadata.
+ *
+ * Non-semver ranges are still represented as requests; compatibility is
+ * decided later so reports can explain where unknown ranges came from.
+ */
 function collectDependencyGraph(
   lock: BunLockFile,
   packagesByLockKey: Map<string, ResolvedPackage>,
@@ -374,6 +426,12 @@ function collectDependencyGraph(
   }
 }
 
+/**
+ * Attach stable human-readable request paths by walking from every workspace.
+ *
+ * The graph may contain shared subgraphs; the first discovered parent is used
+ * only for display, not for dedupe safety decisions.
+ */
 function attachRequestPaths(graph: DependencyGraph): void {
   const parents = new Map<string, string | undefined>()
   const traverseFrom = (startNodeId: string): void => {
@@ -521,6 +579,11 @@ function requestHasOrphanRequester(
   )
 }
 
+/**
+ * Checks whether a request will disappear because its requester package is
+ * itself rewritten to a target template that no longer asks for this dependency
+ * version.
+ */
 function requestWillBeRemovedByRequesterRewrite(
   request: DependencyRequest,
   requestedVersion: string,
@@ -572,6 +635,10 @@ function requestWillBeRemovedByRequesterRewrite(
   return compatibility === false
 }
 
+/**
+ * Analyze duplicate package versions and classify which versions can be
+ * rewritten safely using only entries already present in the lockfile.
+ */
 export function analyzeDuplicatePackages(
   lock: BunLockFile,
 ): DuplicatePackageInfo[] {

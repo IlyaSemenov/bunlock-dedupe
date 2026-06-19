@@ -14,13 +14,18 @@ type RewriteByPackage = Map<string, Map<string, string>>
 type PackageTemplate = { lockKey: string; entry: BunPackageEntry }
 type TemplatesByPackage = Map<string, Map<string, PackageTemplate>>
 
+/** Summary returned by the text-level lockfile rewrite API. */
 export type DedupeLockResult = {
+  /** True when returned `lockText` should replace the input. */
   changed: boolean
   lockText: string
+  /** Number of package entries rewritten or removed across all passes. */
   touchedEntries: number
+  /** Number of distinct package names affected by the rewrite. */
   rewrittenPackages: number
 }
 
+/** Convert analyzer rows into the package/version rewrite table used by fix. */
 function collectVersionRewrites(
   duplicates: DuplicatePackageInfo[],
 ): RewriteByPackage {
@@ -46,6 +51,12 @@ function collectVersionRewrites(
   return rewrites
 }
 
+/**
+ * Index package entries by package name and resolved version.
+ *
+ * Root entries win over nested entries for the same version because replacing a
+ * nested entry with the root tuple usually matches Bun's preferred lock shape.
+ */
 function collectPackageIndex(packages: Record<string, BunPackageEntry>): {
   templates: TemplatesByPackage
   rootVersions: Map<string, string>
@@ -81,6 +92,19 @@ function collectPackageIndex(packages: Record<string, BunPackageEntry>): {
   return { templates, rootVersions }
 }
 
+/**
+ * Resolve the package entry that a dependency would fall back to if a nested
+ * entry were removed.
+ *
+ * This mirrors the lock-key lookup used by the analyzer: closest ancestor
+ * nested entry first, then root entry.
+ *
+ * @param requesterLockKey Lock key whose dependency is being resolved, or
+ * `undefined` for workspace/root lookup.
+ * @param dependencyName Real npm package name to resolve.
+ * @param excludedKey Candidate key to ignore, usually the entry being tested
+ * for removal.
+ */
 function resolveFallbackLockKey(
   packages: Record<string, BunPackageEntry>,
   requesterLockKey: string | undefined,
@@ -217,6 +241,14 @@ function collectWorkspacePackageKeys(lock: BunLockFile): Set<string> {
   return keys
 }
 
+/**
+ * Remove entries that cannot be reached from any workspace dependency after a
+ * rewrite.
+ *
+ * Workspace package entries themselves are preserved even when no package entry
+ * points at them, because Bun lockfiles may include local workspaces as package
+ * keys.
+ */
 function pruneUnreachableEntries(
   lock: BunLockFile,
   packages: Record<string, BunPackageEntry>,
@@ -284,6 +316,12 @@ function pruneUnreachableEntries(
   return { prunedEntries, prunedPackageNames }
 }
 
+/**
+ * Apply one rewrite pass.
+ *
+ * A pass may unlock new rewrites by deleting or replacing requester entries, so
+ * `dedupeLockText` runs this repeatedly until no more entries change.
+ */
 function rewriteEntries(
   lock: BunLockFile,
   packages: Record<string, BunPackageEntry>,
@@ -330,6 +368,8 @@ function rewriteEntries(
       continue
     }
 
+    // `bundled` belongs to the original bundled subtree. When a bundled tuple
+    // is reused elsewhere as a dedupe template, Bun drops that marker.
     packages[lockKey] = clonePackageEntry(replacement.entry, {
       stripBundled: replacement.lockKey !== lockKey,
     })
@@ -469,6 +509,16 @@ export function renderBunLock(lock: BunLockFile): string {
   return `${renderObjectLines(rootObject, 0, true).join("\n")}\n`
 }
 
+/**
+ * Parse, rewrite, prune, and render a bun.lock string.
+ *
+ * The fixed-point loop is intentional: one dedupe can make another nested
+ * entry redundant or reachable through a newer target only after the first pass
+ * has changed the graph.
+ *
+ * @param lockText Raw `bun.lock` text, not a parsed object, so the full
+ * parse/rewrite/render path is exercised.
+ */
 export function dedupeLockText(lockText: string): DedupeLockResult {
   const parsedLock = parseBunLock(lockText)
   const packages = parsedLock.packages ?? {}

@@ -17,12 +17,21 @@ type VersionUnlock = {
   targetVersion: string
 }
 
+/**
+ * A package update that could remove one or more `cannot-dedupe` versions.
+ *
+ * `requesterLockKey` is the intermediate package entry to update; `constrainedBy`
+ * records all inbound ranges that the selected `toVersion` must satisfy.
+ */
 export type SuggestedUpdate = {
+  /** Lock key of the intermediate package entry that should be updated. */
   requesterLockKey: string
   packageName: string
   fromVersion: string
   toVersion: string
+  /** Duplicate versions expected to become removable after this update. */
   deduplicates: VersionUnlock[]
+  /** Inbound parent/workspace ranges that the selected `toVersion` satisfies. */
   constrainedBy: Array<{
     requesterLabel: string
     requesterPath: string[]
@@ -31,10 +40,12 @@ export type SuggestedUpdate = {
 }
 
 export type UpdateAnalysisResult = {
+  /** Duplicate analysis used as the basis for suggestions and reporting. */
   duplicates: DuplicatePackageInfo[]
   suggestedUpdates: SuggestedUpdate[]
 }
 
+/** Test hooks allow registry and Bun cache access to be mocked deterministically. */
 export type UpdateAnalysisOptions = {
   offline?: boolean
   cacheDir?: string
@@ -44,6 +55,25 @@ export type UpdateAnalysisOptions = {
   ) => Promise<Response>
   readDirFn?: (path: string) => string[]
   readFileFn?: (path: string) => string
+}
+
+/**
+ * A package entry that currently blocks dedupe because it requests one or more
+ * older duplicate versions.
+ */
+type RequesterInfo = {
+  /** Lock key of the package entry whose own dependency ranges block dedupe. */
+  lockKey: string
+  packageName: string
+  fromVersion: string
+  /** Ranges from parents/workspaces that constrain possible updates. */
+  inboundRanges: Array<{
+    requesterLabel: string
+    requesterPath: string[]
+    range: string
+  }>
+  /** Duplicate package names currently blocked by this requester. */
+  blockedDuplicateNames: string[]
 }
 
 function collectBlockedDuplicates(
@@ -65,6 +95,15 @@ function collectBlockedDuplicates(
   return [...new Set(blocked)]
 }
 
+/**
+ * A candidate package version is useful only when its dependency ranges accept
+ * every duplicate target version that the current requester blocks.
+ *
+ * @param candidateMeta Registry metadata for a possible newer requester
+ * version.
+ * @param blockedDuplicateNames Duplicate package names requested too narrowly
+ * by the current requester.
+ */
 function candidateUnlocksDeduplication(
   candidateMeta: {
     dependencies?: Record<string, string>
@@ -106,18 +145,6 @@ function isNonSemverRange(range: string): boolean {
   )
 }
 
-type RequesterInfo = {
-  lockKey: string
-  packageName: string
-  fromVersion: string
-  inboundRanges: Array<{
-    requesterLabel: string
-    requesterPath: string[]
-    range: string
-  }>
-  blockedDuplicateNames: string[]
-}
-
 function collectPackageNamesByLockKey(lock: BunLockFile): Map<string, string> {
   const namesByLockKey = new Map<string, string>()
 
@@ -134,6 +161,12 @@ function collectPackageNamesByLockKey(lock: BunLockFile): Map<string, string> {
   return namesByLockKey
 }
 
+/**
+ * Lightweight resolver used while building update constraints.
+ *
+ * This mirrors the analyzer resolver but only needs package names, not full
+ * package metadata.
+ */
 function resolveDependencyLockKey(
   requesterLockKey: string | undefined,
   dependencyName: string,
@@ -222,6 +255,12 @@ function collectRequesterPaths(
   return paths
 }
 
+/**
+ * Find package entries that are worth checking for newer versions.
+ *
+ * Workspaces are skipped because `--update --fix` updates lockfile package
+ * tuples, not package.json manifests.
+ */
 function collectBlockingRequesters(
   duplicates: DuplicatePackageInfo[],
   lock: BunLockFile,
@@ -260,6 +299,12 @@ function collectBlockingRequesters(
   return requesterMap
 }
 
+/**
+ * Collect all semver ranges that constrain each blocking requester.
+ *
+ * The selected registry candidate must satisfy these inbound ranges; otherwise
+ * updating the intermediate package would violate a parent dependency.
+ */
 function collectInboundRanges(
   requesterMap: Map<string, RequesterInfo>,
   duplicates: DuplicatePackageInfo[],
@@ -356,6 +401,7 @@ function collectInboundRanges(
   return inboundByLockKey
 }
 
+/** Drop requesters that either have no blocked duplicates or no usable ranges. */
 function pruneUnsuggestible(
   requesterMap: Map<string, RequesterInfo>,
   inboundByLockKey: Map<
@@ -379,6 +425,12 @@ function pruneUnsuggestible(
   }
 }
 
+/**
+ * Choose the newest registry version that satisfies inbound ranges and changes
+ * the requester's dependency ranges enough to unlock dedupe.
+ *
+ * @param info Blocking package entry plus the parent ranges constraining it.
+ */
 async function findBestCandidate(
   info: RequesterInfo,
   duplicates: DuplicatePackageInfo[],
@@ -444,6 +496,12 @@ async function findBestCandidate(
   return null
 }
 
+/**
+ * Analyze duplicates and suggest intermediate package updates that would make
+ * currently incompatible duplicate versions removable.
+ *
+ * @param lock Parsed lockfile; it is analyzed but not mutated.
+ */
 export async function analyzeDuplicatePackagesWithUpdates(
   lock: BunLockFile,
   options?: UpdateAnalysisOptions,

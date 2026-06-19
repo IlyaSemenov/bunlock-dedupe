@@ -3,6 +3,10 @@ import JSON5 from "json5"
 export type DependencyMap = Record<string, string>
 
 export type BunLockWorkspace = {
+  /**
+   * Optional in Bun lockfiles. When present, it is also used as the lookup
+   * context for workspace-scoped lock keys.
+   */
   name?: string
   dependencies?: DependencyMap
   devDependencies?: DependencyMap
@@ -10,24 +14,43 @@ export type BunLockWorkspace = {
   peerDependencies?: DependencyMap
 }
 
+/**
+ * Metadata stored as the third item of a Bun package tuple.
+ *
+ * `bundled` is context-specific in Bun lockfiles: it belongs to entries under
+ * the package that bundles them and must not be blindly copied to another
+ * lock key when reusing a package tuple as a dedupe template.
+ */
 export type BunPackageMeta = {
   dependencies?: DependencyMap
   optionalDependencies?: DependencyMap
   peerDependencies?: DependencyMap
+  /** Peer dependency names Bun treats as optional. */
   optionalPeers?: string[]
+  /** True only inside the package subtree that actually bundles this entry. */
   bundled?: boolean
   bin?: string | Record<string, string>
   os?: string | string[]
   cpu?: string | string[]
 }
 
+/**
+ * Bun lockfile package tuple:
+ * `[name@version, resolved, metadata, integrity]`.
+ *
+ * Bun omits trailing values freely, so every item after the package spec is
+ * optional even when most registry entries include all four positions.
+ */
 export type BunPackageEntry = [
+  /** Resolved package spec in `name@version` form. */
   spec: string,
+  /** Optional tuple slot; registry packages commonly use an empty string here. */
   resolved?: string,
   meta?: BunPackageMeta,
   integrity?: string,
 ]
 
+/** Parsed shape used by this tool; Bun may preserve additional top-level keys. */
 export type BunLockFile = {
   lockfileVersion?: number
   configVersion?: number
@@ -65,6 +88,10 @@ export function normalizeDependencyMap(value: unknown): DependencyMap {
   return normalized
 }
 
+/**
+ * Splits Bun's resolved package spec (`name@version`) using the last `@`, so
+ * scoped package names such as `@scope/name@1.0.0` are handled correctly.
+ */
 export function parseResolvedSpec(
   spec: string,
 ): { name: string; version: string } | null {

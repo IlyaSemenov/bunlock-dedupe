@@ -22,22 +22,29 @@ export type UpdateSkipReason =
   | "new-dependencies"
 
 export type SkippedUpdate = SuggestedUpdate & {
+  /** Why this suggested update was not written by `--update --fix`. */
   skipReason: UpdateSkipReason
 }
 
 export type UpdateAndDedupeLockResult = {
   changed: boolean
   lockText: string
+  /** Intermediate package entries updated from registry metadata. */
   updatedEntries: number
   updatedPackages: number
+  /** Entries later touched by normal dedupe after updates were applied. */
   dedupedEntries: number
   dedupedPackages: number
+  /** All update opportunities found before safety filtering. */
   suggestedUpdates: SuggestedUpdate[]
+  /** Suggested updates actually written into the lockfile. */
   appliedUpdates: SuggestedUpdate[]
+  /** Suggested updates left for manual/Bun handling. */
   skippedUpdates: SkippedUpdate[]
 }
 
 export type UpdateSafetyResult = {
+  /** Suggestions that can be applied without adding missing lockfile entries. */
   applicableUpdates: SuggestedUpdate[]
   skippedUpdates: SkippedUpdate[]
 }
@@ -49,6 +56,12 @@ type ApplicableUpdate = {
   integrity: string
 }
 
+/**
+ * Convert npm registry metadata into Bun's compact lockfile metadata shape.
+ *
+ * npm stores optional peer information under `peerDependenciesMeta`; Bun stores
+ * only the optional peer names in `optionalPeers`.
+ */
 function metadataToLockMeta(meta: PackageMetadata): BunPackageMeta {
   const lockMeta: BunPackageMeta = {}
   const optionalPeers = collectOptionalPeerNames(meta)
@@ -96,6 +109,17 @@ function collectPackageSpecs(
   return specsByLockKey
 }
 
+/**
+ * Check whether applying an intermediate package update can be done without
+ * adding brand-new lockfile entries.
+ *
+ * `--update --fix` only rewrites existing tuples; if the new package version
+ * needs a dependency version that is not already present, the update is left for
+ * the user and Bun.
+ *
+ * @param specsByLockKey Package versions already available somewhere in the
+ * current lockfile.
+ */
 function canReuseExistingDependencyEntries(
   meta: PackageMetadata,
   specsByLockKey: Map<string, { name: string; version: string }>,
@@ -130,6 +154,10 @@ function canReuseExistingDependencyEntries(
   return true
 }
 
+/**
+ * Split suggested updates into the subset that is safe to write and the subset
+ * that should be reported as manual work.
+ */
 async function assessSuggestedUpdates(
   packages: Record<string, BunPackageEntry>,
   updates: SuggestedUpdate[],
@@ -234,6 +262,12 @@ export async function classifyUpdateSafety(
   }
 }
 
+/**
+ * Apply safe intermediate updates first, then run the normal dedupe rewrite on
+ * the resulting lockfile text.
+ *
+ * @param lockText Raw `bun.lock` text before update analysis and dedupe.
+ */
 export async function updateAndDedupeLockText(
   lockText: string,
   options?: UpdateAnalysisOptions,
