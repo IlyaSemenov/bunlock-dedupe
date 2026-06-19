@@ -26,6 +26,10 @@ bunx bunlock-dedupe /path/to/bun.lock
 bunx bunlock-dedupe /path/to/bun.lock --fix
 ```
 
+After `--fix`, run `bun install` once to let Bun normalize canonical lockfile key placement.
+This extra rewrite is expected for now; see GitHub issue [Match Bun canonical key placement
+](https://github.com/IlyaSemenov/bunlock-dedupe/issues/10).
+
 ## What each mode does
 
 **No flags** — scans the lockfile and shows packages where deduplication is possible. Marks the version that will be kept (`✅`), the versions that can be upgraded to it (`⬆️`), and orphan versions (`🗑️`) that will be removed when the parent is deduped.
