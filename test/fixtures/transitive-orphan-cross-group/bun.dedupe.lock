@@ -17,8 +17,8 @@
 
     "plugin": ["plugin@1.0.0", "", { "dependencies": { "framework": "^2.0.0" } }, "sha"],
 
-    "renderer": ["renderer@2.0.5", "", { "dependencies": { "utils": "2.0.5" } }, "sha"],
-
     "utils": ["utils@2.0.5", "", {}, "sha"],
+
+    "renderer": ["renderer@2.0.5", "", { "dependencies": { "utils": "2.0.5" } }, "sha"],
   }
 }

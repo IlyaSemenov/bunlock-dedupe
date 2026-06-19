@@ -112,4 +112,67 @@ describe("dedupeLockText", () => {
     expect(lock.packages?.native?.[2]).toEqual({})
     expect(lock.packages?.["bundler/native"]?.[2]).toEqual({ bundled: true })
   })
+
+  test("preserves original bun.lock key order without parasitic reordering", () => {
+    // Bun does not sort package keys by a stable comparator; it emits them in
+    // resolution order. Re-sorting (e.g. by nesting depth then segments)
+    // produces parasitic diffs. Two cases that NO single comparator can keep
+    // both correct, so we must preserve input order verbatim:
+    //   depth 1: "@scope/parent/..." before "@scope/parent-kit/..."
+    //   depth 2: "@scope/parent-kit/.../leaf" before "@scope/parent/.../leaf"
+    // A real dedupe happens elsewhere ("useful/lib" -> root "lib") to exercise
+    // the rewrite + render path.
+    const lockText = `{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "dependencies": {
+        "@scope/parent": "1.0.0",
+        "@scope/parent-kit": "1.0.0",
+        "useful": "1.0.0",
+        "lib": "^2.0.0"
+      }
+    }
+  },
+  "packages": {
+    "@scope/parent": ["@scope/parent@1.0.0", "", { "dependencies": { "@scope/mid": "1.0.0" } }, "sha"],
+
+    "@scope/parent/@scope/mid": ["@scope/mid@1.0.0", "", { "dependencies": { "leaf": "1.0.0" } }, "sha"],
+
+    "@scope/parent-kit": ["@scope/parent-kit@1.0.0", "", { "dependencies": { "@scope/mid": "1.0.0" } }, "sha"],
+
+    "@scope/parent-kit/@scope/mid": ["@scope/mid@1.0.0", "", { "dependencies": { "leaf": "1.0.0" } }, "sha"],
+
+    "@scope/parent-kit/@scope/mid/leaf": ["leaf@1.0.0", "", {}, "sha"],
+
+    "@scope/parent/@scope/mid/leaf": ["leaf@1.0.0", "", {}, "sha"],
+
+    "useful": ["useful@1.0.0", "", { "dependencies": { "lib": ">=1.0.0" } }, "sha"],
+
+    "useful/lib": ["lib@1.0.0", "", {}, "sha"],
+
+    "lib": ["lib@2.0.0", "", {}, "sha"]
+  }
+}
+`
+
+    const result = dedupeLockText(lockText)
+    const lock = parseBunLock(result.lockText)
+
+    expect(result.changed).toBe(true)
+    expect(result.lockText).not.toContain('"useful/lib"')
+    // Surviving keys keep their exact input relative order — no re-sort.
+    expect(Object.keys(lock.packages ?? {})).toEqual([
+      "@scope/parent",
+      "@scope/parent/@scope/mid",
+      "@scope/parent-kit",
+      "@scope/parent-kit/@scope/mid",
+      "@scope/parent-kit/@scope/mid/leaf",
+      "@scope/parent/@scope/mid/leaf",
+      "useful",
+      "lib",
+    ])
+  })
 })

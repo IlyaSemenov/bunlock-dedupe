@@ -8,7 +8,6 @@ import {
   parseBunLock,
   parseResolvedSpec,
 } from "./parse"
-import { compareLockKeysByNesting } from "./utils"
 
 type RewriteByPackage = Map<string, Map<string, string>>
 type PackageTemplate = { lockKey: string; entry: BunPackageEntry }
@@ -433,9 +432,9 @@ function renderPackagesPropertyLines(
   const indent = " ".repeat(indentLevel)
   const entryIndent = " ".repeat(indentLevel + 2)
   const lines = [`${indent}${JSON.stringify(key)}: {`]
-  const packageEntries = Object.entries(value)
-    .filter(([, packageEntry]) => packageEntry !== undefined)
-    .sort(([left], [right]) => compareLockKeysByNesting(left, right))
+  const packageEntries = Object.entries(value).filter(
+    ([, packageEntry]) => packageEntry !== undefined,
+  )
 
   for (const [index, [lockKey, packageEntry]] of packageEntries.entries()) {
     lines.push(

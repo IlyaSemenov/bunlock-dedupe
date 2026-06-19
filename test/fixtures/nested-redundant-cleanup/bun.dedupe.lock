@@ -15,16 +15,16 @@
   "packages": {
     "color-lib": ["color-lib@1.0.0", "", { "dependencies": { "kit": "^1.0.0", "pathe": "^1.0.0" } }, "sha"],
 
+    "color-lib/kit": ["kit@1.0.0", "", { "dependencies": { "pathe": "^2.0.0" } }, "sha"],
+
+    "color-lib/kit/pathe": ["pathe@2.0.3", "", {}, "sha"],
+
+    "color-lib/pathe": ["pathe@1.1.2", "", {}, "sha"],
+
     "lib-a": ["lib-a@1.0.0", "", { "dependencies": { "ws": "^8.21.0" } }, "sha"],
 
     "pathe": ["pathe@2.0.3", "", {}, "sha"],
 
     "ws": ["ws@8.21.0", "", {}, "sha"],
-
-    "color-lib/kit": ["kit@1.0.0", "", { "dependencies": { "pathe": "^2.0.0" } }, "sha"],
-
-    "color-lib/pathe": ["pathe@1.1.2", "", {}, "sha"],
-
-    "color-lib/kit/pathe": ["pathe@2.0.3", "", {}, "sha"],
   }
 }
