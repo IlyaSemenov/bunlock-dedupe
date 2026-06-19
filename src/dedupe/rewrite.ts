@@ -3,6 +3,7 @@ import {
   type BunLockFile,
   type BunPackageEntry,
   isPackageEntry,
+  normalizeDependencyMap,
   packageEntryMeta,
   parseBunLock,
   parseResolvedSpec,
@@ -81,7 +82,7 @@ function collectPackageIndex(packages: Record<string, BunPackageEntry>): {
 
 function resolveFallbackLockKey(
   packages: Record<string, BunPackageEntry>,
-  requesterLockKey: string,
+  requesterLockKey: string | undefined,
   dependencyName: string,
   excludedKey: string,
 ): string | undefined {
@@ -95,7 +96,7 @@ function resolveFallbackLockKey(
     const prefix = key.slice(0, -(dependencyName.length + 1))
     if (
       requesterLockKey === prefix ||
-      requesterLockKey.startsWith(`${prefix}/`)
+      requesterLockKey?.startsWith(`${prefix}/`)
     ) {
       if (prefix.length > bestPrefixLength) {
         bestCandidate = key
@@ -132,6 +133,16 @@ function resolvesSameDependencies(
       resolveFallbackLockKey(packages, nestedKey, depName, "") ===
       resolveFallbackLockKey(packages, fallbackKey, depName, ""),
   )
+}
+
+function clonePackageEntry(entry: BunPackageEntry): BunPackageEntry {
+  const [spec, resolved, meta, integrity] = entry
+  return [
+    spec,
+    resolved,
+    meta !== undefined ? { ...meta } : undefined,
+    integrity,
+  ] as BunPackageEntry
 }
 
 /**
@@ -191,10 +202,89 @@ function pruneRedundantNestedEntries(
   return { prunedEntries, prunedPackageNames }
 }
 
+function collectWorkspacePackageKeys(lock: BunLockFile): Set<string> {
+  const keys = new Set<string>()
+
+  for (const workspace of Object.values(lock.workspaces ?? {})) {
+    const workspaceName = workspace.name?.trim()
+    if (workspaceName) keys.add(workspaceName)
+  }
+
+  return keys
+}
+
+function pruneUnreachableEntries(
+  lock: BunLockFile,
+  packages: Record<string, BunPackageEntry>,
+): { prunedEntries: number; prunedPackageNames: Set<string> } {
+  const reachable = new Set<string>()
+  const queue: string[] = []
+  const workspacePackageKeys = collectWorkspacePackageKeys(lock)
+
+  const enqueue = (lockKey: string | undefined): void => {
+    if (!lockKey || reachable.has(lockKey)) return
+
+    reachable.add(lockKey)
+    queue.push(lockKey)
+  }
+
+  for (const workspace of Object.values(lock.workspaces ?? {})) {
+    const workspaceName = workspace.name?.trim()
+    const workspaceDeps = {
+      ...normalizeDependencyMap(workspace.dependencies),
+      ...normalizeDependencyMap(workspace.devDependencies),
+      ...normalizeDependencyMap(workspace.optionalDependencies),
+      ...normalizeDependencyMap(workspace.peerDependencies),
+    }
+
+    for (const dependencyName of Object.keys(workspaceDeps)) {
+      enqueue(
+        resolveFallbackLockKey(
+          packages,
+          workspaceName || undefined,
+          dependencyName,
+          "",
+        ),
+      )
+      enqueue(resolveFallbackLockKey(packages, undefined, dependencyName, ""))
+    }
+  }
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const lockKey = queue[index]
+    if (!lockKey) continue
+
+    const entry = packages[lockKey]
+    if (!isPackageEntry(entry)) continue
+
+    for (const dependencyName of entryDependencyNames(entry)) {
+      enqueue(resolveFallbackLockKey(packages, lockKey, dependencyName, ""))
+    }
+  }
+
+  let prunedEntries = 0
+  const prunedPackageNames = new Set<string>()
+
+  for (const [lockKey, entry] of Object.entries(packages)) {
+    if (reachable.has(lockKey) || workspacePackageKeys.has(lockKey)) continue
+
+    if (isPackageEntry(entry)) {
+      const parsed = parseResolvedSpec(entry[0])
+      if (parsed) prunedPackageNames.add(parsed.name)
+    }
+
+    delete packages[lockKey]
+    prunedEntries += 1
+  }
+
+  return { prunedEntries, prunedPackageNames }
+}
+
 function rewriteEntries(
+  lock: BunLockFile,
   packages: Record<string, BunPackageEntry>,
   rewrites: RewriteByPackage,
-): { touchedEntries: number; rewrittenPackages: number } {
+): { touchedEntries: number; touchedPackageNames: Set<string> } {
   const { templates, rootVersions } = collectPackageIndex(packages)
   const touchedPackageNames = new Set<string>()
   let touchedEntries = 0
@@ -236,13 +326,7 @@ function rewriteEntries(
       continue
     }
 
-    const [spec, resolved, meta, integrity] = replacement
-    packages[lockKey] = [
-      spec,
-      resolved,
-      meta !== undefined ? { ...meta } : undefined,
-      integrity,
-    ] as BunPackageEntry
+    packages[lockKey] = clonePackageEntry(replacement)
     touchedEntries += 1
     touchedPackageNames.add(parsed.name)
   }
@@ -253,11 +337,17 @@ function rewriteEntries(
     for (const name of pruneResult.prunedPackageNames) {
       touchedPackageNames.add(name)
     }
+
+    const unreachablePruneResult = pruneUnreachableEntries(lock, packages)
+    touchedEntries += unreachablePruneResult.prunedEntries
+    for (const name of unreachablePruneResult.prunedPackageNames) {
+      touchedPackageNames.add(name)
+    }
   }
 
   return {
     touchedEntries,
-    rewrittenPackages: touchedPackageNames.size,
+    touchedPackageNames,
   }
 }
 
@@ -375,21 +465,25 @@ export function renderBunLock(lock: BunLockFile): string {
 
 export function dedupeLockText(lockText: string): DedupeLockResult {
   const parsedLock = parseBunLock(lockText)
-  const duplicateGroups = analyzeDuplicatePackages(parsedLock)
-  const rewrites = collectVersionRewrites(duplicateGroups)
+  const packages = parsedLock.packages ?? {}
+  parsedLock.packages = packages
 
-  if (rewrites.size === 0) {
-    return {
-      changed: false,
-      lockText,
-      touchedEntries: 0,
-      rewrittenPackages: 0,
+  let touchedEntries = 0
+  const touchedPackageNames = new Set<string>()
+
+  for (let pass = 0; pass < 50; pass += 1) {
+    const duplicateGroups = analyzeDuplicatePackages(parsedLock)
+    const rewrites = collectVersionRewrites(duplicateGroups)
+    const rewriteResult = rewriteEntries(parsedLock, packages, rewrites)
+    if (rewriteResult.touchedEntries === 0) break
+
+    touchedEntries += rewriteResult.touchedEntries
+    for (const name of rewriteResult.touchedPackageNames) {
+      touchedPackageNames.add(name)
     }
   }
 
-  const packages = parsedLock.packages ?? {}
-  const rewriteResult = rewriteEntries(packages, rewrites)
-  if (rewriteResult.touchedEntries === 0) {
+  if (touchedEntries === 0) {
     return {
       changed: false,
       lockText,
@@ -401,7 +495,7 @@ export function dedupeLockText(lockText: string): DedupeLockResult {
   return {
     changed: true,
     lockText: renderBunLock(parsedLock),
-    touchedEntries: rewriteResult.touchedEntries,
-    rewrittenPackages: rewriteResult.rewrittenPackages,
+    touchedEntries,
+    rewrittenPackages: touchedPackageNames.size,
   }
 }

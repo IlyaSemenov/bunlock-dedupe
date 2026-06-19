@@ -18,7 +18,6 @@ utils:
       - app-a: 1.5.0 → 1.6.0
 
 2 duplicate packages in bun.lock.
-1 package can be deduped.
-1 package cannot be deduped.
+2 packages can be deduped.
 
 Run with --fix to apply available dedupes.
