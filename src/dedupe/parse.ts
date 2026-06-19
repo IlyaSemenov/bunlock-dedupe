@@ -15,6 +15,7 @@ export type BunPackageMeta = {
   optionalDependencies?: DependencyMap
   peerDependencies?: DependencyMap
   optionalPeers?: string[]
+  bundled?: boolean
   bin?: string | Record<string, string>
   os?: string | string[]
   cpu?: string | string[]

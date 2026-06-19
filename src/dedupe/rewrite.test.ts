@@ -81,4 +81,35 @@ describe("dedupeLockText", () => {
     expect(result.lockText).not.toContain('"stale"')
     expect(result.lockText).not.toContain('"stale-leaf"')
   })
+
+  test("does not copy bundled markers out of their original context", () => {
+    const lockText = `{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "dependencies": {
+        "bundler": "1.0.0",
+        "native": ">=1.0.0"
+      }
+    }
+  },
+  "packages": {
+    "bundler": ["bundler@1.0.0", "", { "dependencies": { "native": "^2.0.0" } }, "sha"],
+
+    "bundler/native": ["native@2.0.0", "", { "bundled": true }, "sha"],
+
+    "native": ["native@1.0.0", "", {}, "sha"]
+  }
+}
+`
+
+    const result = dedupeLockText(lockText)
+    const lock = parseBunLock(result.lockText)
+
+    expect(result.changed).toBe(true)
+    expect(lock.packages?.native?.[2]).toEqual({})
+    expect(lock.packages?.["bundler/native"]?.[2]).toEqual({ bundled: true })
+  })
 })

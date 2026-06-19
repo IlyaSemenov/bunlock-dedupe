@@ -11,7 +11,8 @@ import {
 import { compareLockKeysByNesting } from "./utils"
 
 type RewriteByPackage = Map<string, Map<string, string>>
-type TemplatesByPackage = Map<string, Map<string, BunPackageEntry>>
+type PackageTemplate = { lockKey: string; entry: BunPackageEntry }
+type TemplatesByPackage = Map<string, Map<string, PackageTemplate>>
 
 export type DedupeLockResult = {
   changed: boolean
@@ -69,7 +70,7 @@ function collectPackageIndex(packages: Record<string, BunPackageEntry>): {
       templates.set(parsed.name, byVersion)
     }
     if (!byVersion.has(parsed.version) || lockKey === parsed.name) {
-      byVersion.set(parsed.version, entry)
+      byVersion.set(parsed.version, { lockKey, entry })
     }
 
     if (lockKey === parsed.name) {
@@ -135,14 +136,17 @@ function resolvesSameDependencies(
   )
 }
 
-function clonePackageEntry(entry: BunPackageEntry): BunPackageEntry {
+function clonePackageEntry(
+  entry: BunPackageEntry,
+  options?: { stripBundled?: boolean },
+): BunPackageEntry {
   const [spec, resolved, meta, integrity] = entry
-  return [
-    spec,
-    resolved,
-    meta !== undefined ? { ...meta } : undefined,
-    integrity,
-  ] as BunPackageEntry
+  const clonedMeta = meta !== undefined ? { ...meta } : undefined
+  if (options?.stripBundled && clonedMeta?.bundled === true) {
+    delete clonedMeta.bundled
+  }
+
+  return [spec, resolved, clonedMeta, integrity] as BunPackageEntry
 }
 
 /**
@@ -326,7 +330,9 @@ function rewriteEntries(
       continue
     }
 
-    packages[lockKey] = clonePackageEntry(replacement)
+    packages[lockKey] = clonePackageEntry(replacement.entry, {
+      stripBundled: replacement.lockKey !== lockKey,
+    })
     touchedEntries += 1
     touchedPackageNames.add(parsed.name)
   }
