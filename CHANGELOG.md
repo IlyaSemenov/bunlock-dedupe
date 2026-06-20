@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.5.4
+
+### Patch Changes
+
+- 4f4c807: Render each `required by` constraint on its own line instead of comma-joining.
+
 ## 1.5.3
 
 ### Patch Changes
