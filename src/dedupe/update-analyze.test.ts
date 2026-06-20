@@ -223,10 +223,59 @@ describe("analyzeDuplicatePackagesWithUpdates", () => {
     expect(report).toContain("✋ 1.5.0 → 2.1.0")
     expect(report).toContain("can be removed after manual update:")
     expect(report).toContain("- app-blocking: 1.0.0 → 1.1.0")
-    expect(report).toContain("required by: myapp: ^1.0.0")
+    expect(report).toContain("required by:")
+    expect(report).toContain("- myapp: ^1.0.0")
     expect(report).toContain(
       "held back: update adds dependencies missing from the lockfile",
     )
+  })
+
+  test("lists each requiredBy constraint on its own indented line", async () => {
+    const registry = makeRegistry(
+      { "app-blocking": ["1.0.0", "1.1.0"] },
+      {
+        "app-blocking": {
+          "1.1.0": {
+            version: "1.1.0",
+            dependencies: { "shared-dep": "^2.0.0" },
+          },
+        },
+      },
+    )
+
+    const { duplicates, suggestedUpdates } =
+      await analyzeDuplicatePackagesWithUpdates(lockWithCannotDedupe(), {
+        fetchFn: registry,
+      })
+
+    // Replace the single inbound constraint with several so the report has to
+    // render more than one `required by` line.
+    const skippedUpdates = suggestedUpdates.map((update) => ({
+      ...update,
+      skipReason: "new-dependencies" as const,
+      constrainedBy: [
+        { requesterLabel: "alpha", requesterPath: ["alpha"], range: "^1.0.0" },
+        { requesterLabel: "beta", requesterPath: ["beta"], range: "^1.2.0" },
+        {
+          requesterLabel: "gamma",
+          requesterPath: ["gamma > nested"],
+          range: "^1.3.0",
+        },
+      ],
+    }))
+
+    const report = formatDuplicatesReport(duplicates, {
+      includeUnfixable: false,
+      suggestedUpdates,
+      skippedUpdates,
+    })
+
+    expect(report).toContain("required by:\n")
+    expect(report).toContain("          - alpha: ^1.0.0\n")
+    expect(report).toContain("          - beta: ^1.2.0\n")
+    expect(report).toContain("          - gamma > nested: ^1.3.0\n")
+    // The list replaces the old single-line comma-joined form.
+    expect(report).not.toContain("required by: alpha")
   })
 
   test("returns no suggestions when no compatible newer version exists", async () => {

@@ -290,7 +290,10 @@ function formatManualReasonLines(reason: RemovalReason): string[] {
   const lines = [formatReason(reason)]
 
   if (reason.requiredBy && reason.requiredBy.length > 0) {
-    lines.push(`  required by: ${reason.requiredBy.join(", ")}`)
+    lines.push("  required by:")
+    for (const requiredBy of reason.requiredBy) {
+      lines.push(`    - ${requiredBy}`)
+    }
   }
   if (reason.skipReason) {
     lines.push(`  held back: ${SKIP_REASON_TEXT[reason.skipReason]}`)

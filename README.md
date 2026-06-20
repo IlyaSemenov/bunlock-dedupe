@@ -132,6 +132,8 @@ shared-dep:
       - myapp > app-blocking: ^1.0.0
     can be removed after manual update:
       - app-blocking: 1.0.0 → 1.1.0
-        required by: myapp: ^1.0.0
+        required by:
+          - myapp: ^1.0.0
+          - myapp > other-dep: ^1.2.0
         held back: update adds dependencies missing from the lockfile
 ```
