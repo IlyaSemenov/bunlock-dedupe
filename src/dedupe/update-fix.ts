@@ -174,6 +174,9 @@ async function assessSuggestedUpdates(
   const skippedUpdates: SkippedUpdate[] = []
   const specsByLockKey = collectPackageSpecs(packages)
 
+  // This pass reports no progress: every packument it needs is already cached
+  // from analyze, so each lookup is a cache hit and the remaining work is
+  // local. A future network-bound phase can opt in via `options.onProgress`.
   for (const update of updates) {
     const entry = packages[update.requesterLockKey]
     if (!isPackageEntry(entry)) {
@@ -281,10 +284,12 @@ export async function updateAndDedupeLockText(
   const sharedOptions: UpdateAnalysisOptions = { ...options, cache }
 
   const parsedLock = parseBunLock(lockText)
-  const { suggestedUpdates } = await analyzeDuplicatePackagesWithUpdates(
-    parsedLock,
-    sharedOptions,
-  )
+  // Reuse a caller-provided analysis (e.g. when the CLI already ran one for
+  // its report) instead of re-running the registry-bound pass twice.
+  const suggestedUpdates =
+    options?.suggestedUpdates ??
+    (await analyzeDuplicatePackagesWithUpdates(parsedLock, sharedOptions))
+      .suggestedUpdates
   const packages = parsedLock.packages ?? {}
   parsedLock.packages = packages
 

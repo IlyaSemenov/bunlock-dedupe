@@ -1,5 +1,6 @@
 import semver from "semver"
 
+import type { ProgressFn } from "../progress"
 import {
   fetchCompatibleVersions,
   fetchPackageMetadata,
@@ -73,6 +74,17 @@ export type UpdateAnalysisOptions = {
    * single Map to share network results across analyze + safety passes.
    */
   cache?: PackumentCache
+  /**
+   * Called as blocking requesters are processed. Use it to render a progress
+   * indicator; the callback must not throw or mutate the lockfile.
+   */
+  onProgress?: ProgressFn
+  /**
+   * Pre-computed update suggestions. When provided, callers that would
+   * otherwise run their own analyze pass (notably `updateAndDedupeLockText`)
+   * reuse these instead, skipping duplicate work and duplicate progress.
+   */
+  suggestedUpdates?: SuggestedUpdate[]
 }
 
 /**
@@ -517,10 +529,20 @@ export async function analyzeDuplicatePackagesWithUpdates(
   const inboundByLockKey = collectInboundRanges(requesterMap, duplicates, lock)
   pruneUnsuggestible(requesterMap, inboundByLockKey, duplicates)
 
+  const requesterList = [...requesterMap.values()]
+  let completed = 0
   const results = await Promise.all(
-    [...requesterMap.values()].map((info) =>
-      findBestCandidate(info, duplicates, options),
-    ),
+    requesterList.map(async (info) => {
+      const result = await findBestCandidate(info, duplicates, options)
+      completed += 1
+      options?.onProgress?.({
+        phase: "analyze",
+        current: completed,
+        total: requesterList.length,
+        packageName: info.packageName,
+      })
+      return result
+    }),
   )
   const suggestedUpdates = results.filter(
     (u): u is SuggestedUpdate => u !== null,

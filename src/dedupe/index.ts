@@ -1,3 +1,4 @@
+export type { Progress, ProgressFn } from "../progress"
 export type { PackageMetadata, PackumentCache } from "../registry"
 export { RegistryError } from "../registry"
 export type {

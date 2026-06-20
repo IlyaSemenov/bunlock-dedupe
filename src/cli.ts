@@ -20,6 +20,7 @@ import {
   type SuggestedUpdate,
   updateAndDedupeLockText,
 } from "./dedupe"
+import { createProgressRenderer } from "./progress"
 import { readBunLock } from "./read-bun-lock"
 import { createPackumentCache, RegistryError } from "./registry"
 
@@ -134,17 +135,22 @@ async function run(): Promise<void> {
 
   if (values.update) {
     const cache = createPackumentCache()
+    const progress = createProgressRenderer(process.stderr)
+
     const { duplicates, suggestedUpdates } =
       await analyzeDuplicatePackagesWithUpdates(parsedLock, {
         offline: values.offline,
         cache,
+        onProgress: progress.update,
       })
 
     if (values.fix) {
       const result = await updateAndDedupeLockText(lockText, {
         offline: values.offline,
         cache,
+        suggestedUpdates,
       })
+      progress.end()
       if (result.changed) {
         writeFileSync(lockPath, result.lockText, "utf8")
       }
@@ -178,17 +184,21 @@ async function run(): Promise<void> {
     }
 
     const dedupeResult = dedupeLockText(lockText)
+    const { skippedUpdates } = await classifyUpdateSafety(
+      lockText,
+      suggestedUpdates,
+      {
+        offline: values.offline,
+        cache,
+      },
+    )
+    progress.end()
 
     console.log(
       formatReport(duplicates, dedupeResult, lockPath, {
         includeUnfixable: values.all,
         suggestedUpdates,
-        skippedUpdates: (
-          await classifyUpdateSafety(lockText, suggestedUpdates, {
-            offline: values.offline,
-            cache,
-          })
-        ).skippedUpdates,
+        skippedUpdates,
       }),
     )
     return

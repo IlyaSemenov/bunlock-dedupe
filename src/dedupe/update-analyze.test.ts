@@ -245,4 +245,27 @@ describe("analyzeDuplicatePackagesWithUpdates", () => {
     ).toBe(true)
     expect(suggestedUpdates).toEqual([])
   })
+
+  test("reports analyze progress per processed requester", async () => {
+    const registry = makeRegistry(
+      { "app-blocking": ["1.0.0", "1.1.0"] },
+      {
+        "app-blocking": {
+          "1.1.0": {
+            version: "1.1.0",
+            dependencies: { "shared-dep": "^2.0.0" },
+          },
+        },
+      },
+    )
+
+    const events: { phase: string; current: number; total: number }[] = []
+    await analyzeDuplicatePackagesWithUpdates(lockWithCannotDedupe(), {
+      fetchFn: registry,
+      onProgress: (p) =>
+        events.push({ phase: p.phase, current: p.current, total: p.total }),
+    })
+
+    expect(events).toEqual([{ phase: "analyze", current: 1, total: 1 }])
+  })
 })
