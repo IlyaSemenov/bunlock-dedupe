@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 
-import { fetchCompatibleVersions, fetchPackageMetadata } from "./registry"
+import {
+  createPackumentCache,
+  fetchCompatibleVersions,
+  fetchPackageMetadata,
+  RegistryError,
+} from "./registry"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,14 +113,30 @@ describe("fetchCompatibleVersions (online)", () => {
     expect(result).toEqual([])
   })
 
-  test("returns empty array on fetch error", async () => {
-    const result = await fetchCompatibleVersions("pkg", {
+  test("throws RegistryError on network failure", async () => {
+    const promise = fetchCompatibleVersions("pkg", {
       ranges: ["^1.0.0"],
       fetchFn: (async () => {
         throw new Error("network error")
       }) as FetchFn,
     })
-    expect(result).toEqual([])
+    await expect(promise).rejects.toBeInstanceOf(RegistryError)
+  })
+
+  test("throws RegistryError on 5xx response", async () => {
+    const promise = fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      fetchFn: (async () => new Response(null, { status: 503 })) as FetchFn,
+    })
+    await expect(promise).rejects.toBeInstanceOf(RegistryError)
+  })
+
+  test("throws RegistryError on 429 rate-limit response", async () => {
+    const promise = fetchCompatibleVersions("pkg", {
+      ranges: ["^1.0.0"],
+      fetchFn: (async () => new Response(null, { status: 429 })) as FetchFn,
+    })
+    await expect(promise).rejects.toBeInstanceOf(RegistryError)
   })
 
   test("encodes scoped package name correctly", async () => {
@@ -281,13 +302,21 @@ describe("fetchPackageMetadata (online)", () => {
     expect(result).toBeNull()
   })
 
-  test("returns null on fetch error", async () => {
-    const result = await fetchPackageMetadata("pkg", "1.0.0", {
+  test("throws RegistryError on network failure", async () => {
+    const promise = fetchPackageMetadata("pkg", "1.0.0", {
       fetchFn: (async () => {
         throw new Error("network error")
       }) as FetchFn,
     })
-    expect(result).toBeNull()
+    await expect(promise).rejects.toBeInstanceOf(RegistryError)
+  })
+
+  test("throws RegistryError on malformed registry response", async () => {
+    const promise = fetchPackageMetadata("pkg", "1.0.0", {
+      fetchFn: (async () =>
+        new Response("not json", { status: 200 })) as FetchFn,
+    })
+    await expect(promise).rejects.toBeInstanceOf(RegistryError)
   })
 
   test("encodes scoped package name correctly", async () => {
@@ -387,5 +416,82 @@ describe("fetchPackageMetadata (offline)", () => {
       }),
     })
     expect(result).toEqual(JSON.parse(pkgJson))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Packument cache
+// ---------------------------------------------------------------------------
+
+describe("packument cache", () => {
+  const meta = { version: "1.1.0" }
+  const packument = { versions: { "1.1.0": meta } }
+
+  test("shares one network request across cache readers", async () => {
+    let calls = 0
+    const cache = createPackumentCache()
+    const fetchFn = (async () => {
+      calls += 1
+      return new Response(JSON.stringify(packument), { status: 200 })
+    }) as FetchFn
+
+    await fetchCompatibleVersions("pkg", { ranges: ["^1.0.0"], fetchFn, cache })
+    const reused = await fetchPackageMetadata("pkg", "1.1.0", {
+      fetchFn,
+      cache,
+    })
+
+    expect(reused).toEqual(meta)
+    expect(calls).toBe(1)
+  })
+
+  test("evicts a failed request so the next call retries", async () => {
+    let calls = 0
+    const cache = createPackumentCache()
+    const fetchFn = (async () => {
+      calls += 1
+      if (calls === 1) throw new Error("network error")
+      return new Response(JSON.stringify(packument), { status: 200 })
+    }) as FetchFn
+
+    await expect(
+      fetchPackageMetadata("pkg", "1.1.0", { fetchFn, cache }),
+    ).rejects.toBeInstanceOf(RegistryError)
+    // The transient failure must not poison the cache: a later read retries
+    // and succeeds rather than replaying the rejected promise.
+    const retried = await fetchPackageMetadata("pkg", "1.1.0", {
+      fetchFn,
+      cache,
+    })
+
+    expect(retried).toEqual(meta)
+    expect(calls).toBe(2)
+  })
+
+  test("concurrent readers of a failing request all reject and leave an empty cache", async () => {
+    let calls = 0
+    const cache = createPackumentCache()
+    const fetchFn = (async () => {
+      calls += 1
+      throw new Error("network error")
+    }) as FetchFn
+
+    // Mirrors the Promise.all fan-out in analyze: several readers share one
+    // in-flight promise, so all of them must observe the rejection and none
+    // may keep the failure cached.
+    const results = await Promise.allSettled([
+      fetchPackageMetadata("pkg", "1.1.0", { fetchFn, cache }),
+      fetchPackageMetadata("pkg", "1.1.0", { fetchFn, cache }),
+    ])
+
+    expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"])
+    for (const result of results) {
+      expect((result as PromiseRejectedResult).reason).toBeInstanceOf(
+        RegistryError,
+      )
+    }
+    // One shared request for both readers; the failure is not cached.
+    expect(calls).toBe(1)
+    expect(cache.size).toBe(0)
   })
 })

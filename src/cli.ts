@@ -21,7 +21,7 @@ import {
   updateAndDedupeLockText,
 } from "./dedupe"
 import { readBunLock } from "./read-bun-lock"
-import { createPackumentCache } from "./registry"
+import { createPackumentCache, RegistryError } from "./registry"
 
 const commandName = "bunlock-dedupe"
 
@@ -222,4 +222,12 @@ async function run(): Promise<void> {
   console.log(formatFixSummary(fixSummary, lockPath))
 }
 
-run()
+run().catch((error: unknown) => {
+  if (error instanceof RegistryError) {
+    // A transient registry failure would otherwise produce a report skewed by
+    // missing data, so abort instead of reporting partial results.
+    console.error(`Error: ${error.message}`)
+    process.exit(1)
+  }
+  throw error
+})

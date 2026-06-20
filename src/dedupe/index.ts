@@ -1,4 +1,5 @@
 export type { PackageMetadata, PackumentCache } from "../registry"
+export { RegistryError } from "../registry"
 export type {
   DependencyRequest,
   DuplicatePackageInfo,

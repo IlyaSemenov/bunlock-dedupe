@@ -4,5 +4,6 @@ export {
   dedupeLockText,
   formatDuplicatesReport,
   parseBunLock,
+  RegistryError,
   updateAndDedupeLockText,
 } from "./dedupe"

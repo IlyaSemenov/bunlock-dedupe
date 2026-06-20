@@ -24,6 +24,26 @@ type Packument = {
 }
 
 /**
+ * Thrown when a registry request fails transiently (network error, 5xx, rate
+ * limit, malformed JSON) rather than confirming that a package does not exist.
+ *
+ * Such failures must abort the run instead of being silently treated as a
+ * missing package: continuing would silently drop update suggestions and
+ * produce a report skewed by data that never arrived. A genuine 404 stays a
+ * `null` result and is not an error.
+ */
+export class RegistryError extends Error {
+  constructor(
+    readonly packageName: string,
+    message: string,
+    options?: { cause?: unknown },
+  ) {
+    super(`Failed to fetch ${packageName} from registry: ${message}`, options)
+    this.name = "RegistryError"
+  }
+}
+
+/**
  * Packument cache shared across analyze and safety passes within one run.
  *
  * Stores the in-flight {@link Packument} fetch per package so concurrent
@@ -158,9 +178,10 @@ function readCacheEntries(
  * The in-flight promise is stored in `options.cache` immediately so concurrent
  * callers (e.g. several `Promise.all` branches that resolve to the same
  * package name) share one network request. Only confirmed outcomes are kept:
- * 200 OK packuments and 404 misses stay cached; transient failures (network
- * errors, 5xx, malformed JSON) evict themselves so the next call retries
- * instead of being poisoned for the rest of the run.
+ * 200 OK packuments and 404 misses (a `null` result) stay cached. Transient
+ * failures (network errors, 5xx, malformed JSON) throw {@link RegistryError}
+ * and evict the in-flight entry, so the run aborts instead of being silently
+ * skewed by data that never arrived.
  */
 async function fetchPackument(
   packageName: string,
@@ -171,9 +192,6 @@ async function fetchPackument(
   if (existing) return existing
 
   const promise = (async (): Promise<Packument | null> => {
-    let result: Packument | null = null
-    let cacheable = true
-
     if (options.offline) {
       const {
         readDirFn = readdirSync,
@@ -192,44 +210,44 @@ async function fetchPackument(
           // Stale index dirs and unreadable entries are skipped.
         }
       }
-      result = Object.keys(versions).length > 0 ? { versions } : null
-    } else {
-      const fetchImpl = options.fetchFn ?? fetch
-      const encodedName = encodePackageNameForRegistryPath(packageName)
-      try {
-        const response = await fetchImpl(
-          `https://registry.npmjs.org/${encodedName}`,
-          { headers: { Accept: "application/vnd.npm.install-v1+json" } },
-        )
-        if (response.ok) {
-          try {
-            result = (await response.json()) as Packument
-          } catch {
-            // Malformed JSON — treat as transient so the next call retries.
-            cacheable = false
-          }
-        } else if (response.status === 404) {
-          result = null
-        } else {
-          // 5xx, rate limits, etc. — retryable on a subsequent call.
-          cacheable = false
-        }
-      } catch {
-        // Network failure — retryable on a subsequent call.
-        cacheable = false
-      }
+      return Object.keys(versions).length > 0 ? { versions } : null
     }
 
-    if (!cacheable && cache) {
-      // Evict our own in-flight entry so the next caller retries instead of
-      // observing a transient failure as a permanent miss.
-      cache.delete(packageName)
+    const fetchImpl = options.fetchFn ?? fetch
+    const encodedName = encodePackageNameForRegistryPath(packageName)
+    let response: Response
+    try {
+      response = await fetchImpl(`https://registry.npmjs.org/${encodedName}`, {
+        headers: { Accept: "application/vnd.npm.install-v1+json" },
+      })
+    } catch (error) {
+      throw new RegistryError(packageName, "network request failed", {
+        cause: error,
+      })
     }
 
-    return result
+    // A genuine 404 confirms the package does not exist — a cacheable `null`,
+    // not a transient failure.
+    if (response.status === 404) return null
+    if (!response.ok) {
+      throw new RegistryError(
+        packageName,
+        `registry responded with status ${response.status}`,
+      )
+    }
+    try {
+      return (await response.json()) as Packument
+    } catch (error) {
+      throw new RegistryError(packageName, "malformed registry response", {
+        cause: error,
+      })
+    }
   })()
 
   cache?.set(packageName, promise)
+  // Evict a rejected in-flight entry so a later caller does not observe the
+  // transient failure as a cached, permanent result.
+  promise.catch(() => cache?.delete(packageName))
   return promise
 }
 
