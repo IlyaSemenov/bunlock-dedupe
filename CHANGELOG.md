@@ -1,5 +1,14 @@
 # bunlock-dedupe
 
+## 1.5.3
+
+### Patch Changes
+
+- 4bbc26d: Add TTY progress when doing `--update`.
+- f37fabb: Cache registry packuments to dedupe network requests.
+- 37f595d: Fail fast on registry errors when called with `--update`.
+- d6782f1: Preserve original `bun.lock` package key order instead of re-sorting, fixing parasitic reordering of unrelated entries (e.g. `@nuxt/devtools-kit/...` vs `@nuxt/devtools/...`).
+
 ## 1.5.2
 
 ### Patch Changes
