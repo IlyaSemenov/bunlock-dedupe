@@ -8,20 +8,50 @@ export type BunLockReadResult = {
 
 const defaultLockFilename = "bun.lock"
 
-function resolveBunLockPath(bunLockPath?: string): string {
-  const p = bunLockPath ?? defaultLockFilename
-  try {
-    if (statSync(p).isDirectory()) {
-      return path.join(p, defaultLockFilename)
+export function resolveBunLockPath(bunLockPath?: string): string {
+  if (bunLockPath) {
+    try {
+      if (statSync(bunLockPath).isDirectory()) {
+        return path.join(bunLockPath, defaultLockFilename)
+      }
+    } catch {
+      // Not a directory or doesn't exist yet; let the caller surface the error.
     }
-  } catch {
-    // Not a directory or doesn't exist yet; let the caller surface the error.
+    return bunLockPath
   }
-  return p
+
+  // No explicit path: walk up from cwd looking for bun.lock, bail at filesystem root.
+  const startDir = process.cwd()
+  let dir = startDir
+  while (true) {
+    const candidate = path.join(dir, defaultLockFilename)
+    try {
+      if (statSync(candidate).isFile()) {
+        return candidate
+      }
+    } catch {
+      // Not present here; keep walking up.
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir) {
+      throw new Error(
+        `cannot find ${defaultLockFilename} in ${startDir} or any parent directory`,
+      )
+    }
+    dir = parent
+  }
 }
 
 export function readBunLock(bunLockPath?: string): BunLockReadResult {
-  const lockPath = resolveBunLockPath(bunLockPath)
+  let lockPath: string
+  try {
+    lockPath = resolveBunLockPath(bunLockPath)
+  } catch (error) {
+    console.error(
+      `Error: ${error instanceof Error ? error.message : "cannot resolve bun.lock path"}`,
+    )
+    process.exit(1)
+  }
   try {
     return {
       path: lockPath,
