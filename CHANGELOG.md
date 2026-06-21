@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.6.0
+
+### Minor Changes
+
+- 93c9258: Find `bun.lock` by walking up parent directories when no path is given.
+
 ## 1.5.4
 
 ### Patch Changes
