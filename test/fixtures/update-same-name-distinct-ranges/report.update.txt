@@ -6,9 +6,11 @@ shared-dep:
     used by:
       - myapp > plugin-a > app-core: ^1.0.0
       - myapp > plugin-b > app-core: ^1.0.0
+      - myapp > plugin-c > app-core: ^1.0.0
     removed after:
-      - app-core: 1.0.0 → 1.1.0
-      - app-core: 1.0.0 → 2.1.0
+      - myapp > plugin-a > app-core: 1.0.0 → 1.1.0
+      - myapp > plugin-b > app-core: 1.0.0 → 2.1.0
+      - myapp > plugin-c > app-core: 1.0.0 → 1.1.0
 
 1 duplicate package in bun.lock.
 1 intermediate package can be updated to unlock deduplication.

@@ -23,9 +23,19 @@ type RemovalReason = {
   skipReason?: UpdateSkipReason
 }
 
+/**
+ * A removal reason bound to the exact requester node it came from.
+ *
+ * `requesterPath` is the display path of the package the reason is about, so
+ * reasons that share a package name can still be told apart in a report.
+ */
+type LocatedRemovalReason = RemovalReason & {
+  requesterPath: string[]
+}
+
 type RenderVersionInfo = DuplicateVersionInfo & {
   displayStatus?: "manual-update"
-  removedAfter?: RemovalReason[]
+  removedAfter?: LocatedRemovalReason[]
   manualUpdateReasons?: RemovalReason[]
 }
 
@@ -118,6 +128,10 @@ export function updateIdentity(update: SuggestedUpdate): string {
 
 function reasonKey(reason: RemovalReason): string {
   return `${reason.packageName}\0${reason.fromVersion}\0${reason.toVersion ?? ""}`
+}
+
+function locatedReasonKey(reason: LocatedRemovalReason): string {
+  return `${reasonKey(reason)}\0${reason.requesterPath.join(" > ")}`
 }
 
 function addReason(
@@ -248,6 +262,26 @@ function reasonsForRequests(
   )
 }
 
+/**
+ * Same lookup as {@link reasonsForRequests}, but each reason keeps the path of
+ * the requester it was found under, so identical package names reached through
+ * different paths stay distinguishable.
+ */
+function locatedReasonsForRequests(
+  versionInfo: DuplicateVersionInfo,
+  reasonsByRequester: Map<string, RemovalReason[]>,
+): LocatedRemovalReason[] {
+  return versionInfo.requests.flatMap((request) =>
+    (reasonsByRequester.get(request.requesterNodeId) ?? []).map((reason) => ({
+      ...reason,
+      requesterPath:
+        request.requestPath.length > 0
+          ? request.requestPath
+          : [request.requesterLabel],
+    })),
+  )
+}
+
 function hasSkippedUpdateForVersion(
   duplicate: DuplicatePackageInfo,
   versionInfo: DuplicateVersionInfo,
@@ -284,12 +318,42 @@ function pushSection(
   }
 }
 
-function formatReason(reason: RemovalReason): string {
+function formatReason(
+  reason: RemovalReason,
+  displayName: string = reason.packageName,
+): string {
   if (!reason.toVersion) {
-    return `${reason.packageName}: ${reason.fromVersion} is removed`
+    return `${displayName}: ${reason.fromVersion} is removed`
   }
 
-  return `${reason.packageName}: ${reason.fromVersion} → ${reason.toVersion}`
+  return `${displayName}: ${reason.fromVersion} → ${reason.toVersion}`
+}
+
+/**
+ * Render the `removed after` entries of a single version block.
+ *
+ * A package name is shown as a bare name while it means one thing in the block.
+ * Once the same name stands for different changes — the same package reached
+ * through different paths and updated to different versions — every line for
+ * that name is qualified with its full path instead.
+ */
+function formatRemovedAfterLines(reasons: LocatedRemovalReason[]): string[] {
+  const keysByName = new Map<string, Set<string>>()
+  for (const reason of reasons) {
+    const keys = keysByName.get(reason.packageName) ?? new Set<string>()
+    keys.add(reasonKey(reason))
+    keysByName.set(reason.packageName, keys)
+  }
+
+  const lines = reasons.map((reason) => {
+    const isAmbiguous = (keysByName.get(reason.packageName)?.size ?? 0) > 1
+    return formatReason(
+      reason,
+      isAmbiguous ? reason.requesterPath.join(" > ") : undefined,
+    )
+  })
+
+  return [...new Set(lines)]
 }
 
 function formatManualReasonLines(reason: RemovalReason): string[] {
@@ -363,11 +427,14 @@ export function formatDuplicatesReport(
 
       const removedAfter = dedupeByKey(
         [
-          ...reasonsForRequests(versionInfo, dedupeReasonsByRequester),
-          ...reasonsForRequests(versionInfo, appliedUpdateReasonsByRequester),
-          ...reasonsForRequests(versionInfo, orphanReasonsByRequester),
+          ...locatedReasonsForRequests(versionInfo, dedupeReasonsByRequester),
+          ...locatedReasonsForRequests(
+            versionInfo,
+            appliedUpdateReasonsByRequester,
+          ),
+          ...locatedReasonsForRequests(versionInfo, orphanReasonsByRequester),
         ],
-        reasonKey,
+        locatedReasonKey,
       )
 
       return {
@@ -420,7 +487,7 @@ export function formatDuplicatesReport(
       pushSection(
         lines,
         "removed after",
-        (versionInfo.removedAfter ?? []).map(formatReason),
+        formatRemovedAfterLines(versionInfo.removedAfter ?? []),
       )
       pushSection(
         lines,
