@@ -42,6 +42,86 @@ function makeRegistry(
 }
 
 describe("updateAndDedupeLockText", () => {
+  test("orders metadata created from an update like bun install", async () => {
+    const lockText = `{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "myapp",
+      "dependencies": {
+        "app-blocking": "^1.0.0",
+        "shared-dep": "^2.0.0",
+        "@scope/alpha": "^1.0.0",
+        "optional-a": "^1.0.0",
+        "optional-z": "^1.0.0",
+        "peer-a": "^1.0.0",
+        "peer-z": "^1.0.0",
+        "zeta": "^1.0.0"
+      }
+    }
+  },
+  "packages": {
+    "app-blocking": ["app-blocking@1.0.0", "", { "dependencies": { "shared-dep": "^1.0.0" } }, "sha-old"],
+
+    "app-blocking/shared-dep": ["shared-dep@1.5.0", "", {}, "sha-nested"],
+
+    "shared-dep": ["shared-dep@2.1.0", "", {}, "sha-root"],
+
+    "@scope/alpha": ["@scope/alpha@1.0.0", "", {}, "sha"],
+
+    "optional-a": ["optional-a@1.0.0", "", {}, "sha"],
+
+    "optional-z": ["optional-z@1.0.0", "", {}, "sha"],
+
+    "peer-a": ["peer-a@1.0.0", "", {}, "sha"],
+
+    "peer-z": ["peer-z@1.0.0", "", {}, "sha"],
+
+    "zeta": ["zeta@1.0.0", "", {}, "sha"]
+  }
+}
+`
+
+    const result = await updateAndDedupeLockText(lockText, {
+      fetchFn: makeRegistry(
+        { "app-blocking": ["1.0.0", "1.1.0"] },
+        {
+          "app-blocking": {
+            "1.1.0": {
+              version: "1.1.0",
+              dependencies: {
+                zeta: "^1.0.0",
+                "@scope/alpha": "^1.0.0",
+                "shared-dep": "^2.0.0",
+              },
+              optionalDependencies: {
+                "optional-z": "^1.0.0",
+                "optional-a": "^1.0.0",
+              },
+              peerDependencies: {
+                "peer-z": "^1.0.0",
+                "peer-a": "^1.0.0",
+              },
+              peerDependenciesMeta: {
+                "optional-peer-z": { optional: true },
+                "optional-peer-a": { optional: true },
+              },
+              bin: { zebra: "zebra.js", alpha: "alpha.js" },
+              os: ["win32", "darwin"],
+              cpu: ["x64", "arm64"],
+              dist: { integrity: "sha-new" },
+            },
+          },
+        },
+      ),
+    })
+
+    expect(result.lockText).toContain(
+      `"app-blocking": ["app-blocking@1.1.0", "", { "dependencies": { "@scope/alpha": "^1.0.0", "shared-dep": "^2.0.0", "zeta": "^1.0.0" }, "optionalDependencies": { "optional-a": "^1.0.0", "optional-z": "^1.0.0" }, "peerDependencies": { "peer-a": "^1.0.0", "peer-z": "^1.0.0" }, "optionalPeers": ["optional-peer-z", "optional-peer-a"], "bin": { "zebra": "zebra.js", "alpha": "alpha.js" }, "os": ["win32", "darwin"], "cpu": ["x64", "arm64"] }, "sha-new"]`,
+    )
+  })
+
   test("updates intermediate packages and then dedupes unlocked nested deps", async () => {
     const lockText = `{
   "lockfileVersion": 1,

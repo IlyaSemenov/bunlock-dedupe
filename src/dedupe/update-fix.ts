@@ -60,6 +60,14 @@ type ApplicableUpdate = {
   integrity: string
 }
 
+function sortRecord<T>(record: Record<string, T>): Record<string, T> {
+  return Object.fromEntries(
+    Object.entries(record).sort(
+      ([left], [right]) => +(left > right) - +(left < right),
+    ),
+  )
+}
+
 /**
  * Convert npm registry metadata into Bun's compact lockfile metadata shape.
  *
@@ -70,11 +78,15 @@ function metadataToLockMeta(meta: PackageMetadata): BunPackageMeta {
   const lockMeta: BunPackageMeta = {}
   const optionalPeers = collectOptionalPeerNames(meta)
 
-  if (meta.dependencies) lockMeta.dependencies = meta.dependencies
-  if (meta.optionalDependencies) {
-    lockMeta.optionalDependencies = meta.optionalDependencies
+  if (meta.dependencies) {
+    lockMeta.dependencies = sortRecord(meta.dependencies)
   }
-  if (meta.peerDependencies) lockMeta.peerDependencies = meta.peerDependencies
+  if (meta.optionalDependencies) {
+    lockMeta.optionalDependencies = sortRecord(meta.optionalDependencies)
+  }
+  if (meta.peerDependencies) {
+    lockMeta.peerDependencies = sortRecord(meta.peerDependencies)
+  }
   if (optionalPeers.size > 0) lockMeta.optionalPeers = [...optionalPeers]
   if (meta.bin) lockMeta.bin = meta.bin
   if (meta.os) lockMeta.os = meta.os
