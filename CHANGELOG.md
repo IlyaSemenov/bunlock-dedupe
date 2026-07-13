@@ -1,5 +1,13 @@
 # bunlock-dedupe
 
+## 1.6.1
+
+### Patch Changes
+
+- 7f24581: Fix `--update --fix` writing an inconsistent lockfile when a duplicate version is also pinned by a package that has no update of its own; such updates are no longer suggested or applied, and the report now reflects the written lockfile.
+- 69c86cc: Qualify `removed after` entries with the full dependency path when the same package name stands for different changes in one block.
+- f9a6c78: Sort dependency maps in updated `bun.lock` package metadata to avoid a follow-up diff from Bun.
+
 ## 1.6.0
 
 ### Minor Changes
