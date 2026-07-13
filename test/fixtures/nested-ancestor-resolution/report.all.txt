@@ -1,0 +1,16 @@
+unplugin:
+  ✅ 3.3.0
+    used by:
+      - example > content: ^3.3.0
+  ⬆️ 3.0.0 → 3.3.0
+    used by:
+      - example > ui: ^3.0.0
+  ❌ 2.3.11
+    used by:
+      - example > ui > auto-import: ^2.3.11
+      - example > ui > auto-import > unimport: ^2.3.11
+
+1 duplicate package in bun.lock.
+1 package can be deduped.
+
+Run with --fix to apply available dedupes.

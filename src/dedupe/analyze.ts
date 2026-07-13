@@ -104,8 +104,8 @@ type OrphanDetectionContext = {
 
 /**
  * Resolve a dependency the way Bun lock keys are structured:
- * nearest nested `requester/dependency` wins, then root `dependency`, then the
- * closest ancestor-provided nested entry.
+ * nearest nested `requester/dependency` wins, then the closest
+ * ancestor-provided nested entry, then root `dependency`.
  *
  * This is the canonical lock-key resolution shared by graph building, update
  * planning, and update safety checks; only the lock keys matter, so any map
@@ -124,6 +124,29 @@ export function resolveDependencyLockKey(
     const nestedKey = `${requesterLockKey}/${dependencyName}`
     if (packagesByLockKey.has(nestedKey)) {
       return nestedKey
+    }
+
+    let bestCandidate: string | undefined
+    let bestPrefixLength = -1
+    for (const key of packagesByLockKey.keys()) {
+      if (!key.endsWith(`/${dependencyName}`)) {
+        continue
+      }
+
+      const prefix = key.slice(0, -(dependencyName.length + 1))
+      if (
+        requesterLockKey === prefix ||
+        requesterLockKey.startsWith(`${prefix}/`)
+      ) {
+        if (prefix.length > bestPrefixLength) {
+          bestCandidate = key
+          bestPrefixLength = prefix.length
+        }
+      }
+    }
+
+    if (bestCandidate) {
+      return bestCandidate
     }
   }
 
@@ -148,26 +171,7 @@ export function resolveDependencyLockKey(
     return uniqueCandidate
   }
 
-  let bestCandidate: string | undefined
-  let bestPrefixLength = -1
-  for (const key of packagesByLockKey.keys()) {
-    if (!key.endsWith(`/${dependencyName}`)) {
-      continue
-    }
-
-    const prefix = key.slice(0, -(dependencyName.length + 1))
-    if (
-      requesterLockKey === prefix ||
-      requesterLockKey.startsWith(`${prefix}/`)
-    ) {
-      if (prefix.length > bestPrefixLength) {
-        bestCandidate = key
-        bestPrefixLength = prefix.length
-      }
-    }
-  }
-
-  return bestCandidate
+  return undefined
 }
 
 function compareVersionDescending(left: string, right: string): number {
