@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.6.2
+
+### Patch Changes
+
+- 8c26466: Resolve nested dependency requests through their closest ancestor lock entry so compatible root versions are no longer incorrectly blocked from deduplication.
+
 ## 1.6.1
 
 ### Patch Changes
