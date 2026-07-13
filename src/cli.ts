@@ -7,17 +7,14 @@ import {
   buildFixSummary,
   formatFixSummary,
   formatReport,
-  formatReportOutput,
-  formatUpdateFixSummary,
+  formatUpdateFixReport,
 } from "./cli-messages"
 import {
   analyzeDuplicatePackages,
   analyzeDuplicatePackagesWithUpdates,
   classifyUpdateSafety,
   dedupeLockText,
-  formatDuplicatesReport,
   parseBunLock,
-  type SuggestedUpdate,
   updateAndDedupeLockText,
 } from "./dedupe"
 import { createProgressRenderer } from "./progress"
@@ -42,25 +39,6 @@ function fail(message: string): never {
   console.error(`Error: ${message}`)
   printUsage()
   process.exit(1)
-}
-
-function countUniqueSkippedDedupePackages(updates: SuggestedUpdate[]): number {
-  return new Set(
-    updates.flatMap((update) => update.deduplicates.map((d) => d.name)),
-  ).size
-}
-
-function buildSkippedUpdateSummary(updates: SuggestedUpdate[]): {
-  skippedUpdateCount: number
-  skippedPackageCount: number
-  skippedDedupePackageCount: number
-} {
-  return {
-    skippedUpdateCount: updates.length,
-    skippedPackageCount: new Set(updates.map((update) => update.packageName))
-      .size,
-    skippedDedupePackageCount: countUniqueSkippedDedupePackages(updates),
-  }
 }
 
 async function run(): Promise<void> {
@@ -156,29 +134,9 @@ async function run(): Promise<void> {
       }
 
       console.log(
-        formatReportOutput(
-          formatDuplicatesReport(duplicates, {
-            includeUnfixable: values.all,
-            suggestedUpdates,
-            skippedUpdates: result.skippedUpdates,
-          }),
-          formatUpdateFixSummary(
-            result.changed
-              ? {
-                  kind: "updated",
-                  updatedEntries: result.updatedEntries,
-                  updatedPackages: result.updatedPackages,
-                  dedupedEntries: result.dedupedEntries,
-                  dedupedPackages: result.dedupedPackages,
-                  ...buildSkippedUpdateSummary(result.skippedUpdates),
-                }
-              : {
-                  kind: "no-change",
-                  ...buildSkippedUpdateSummary(result.skippedUpdates),
-                },
-            lockPath,
-          ),
-        ),
+        formatUpdateFixReport(duplicates, result, lockPath, {
+          includeUnfixable: values.all,
+        }),
       )
       return
     }

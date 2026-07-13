@@ -107,14 +107,18 @@ type OrphanDetectionContext = {
  * nearest nested `requester/dependency` wins, then root `dependency`, then the
  * closest ancestor-provided nested entry.
  *
+ * This is the canonical lock-key resolution shared by graph building, update
+ * planning, and update safety checks; only the lock keys matter, so any map
+ * keyed by lock key works.
+ *
  * @param requesterLockKey Package lock key that owns the dependency. Use
  * `undefined` for workspace/root resolution.
  * @param dependencyName Real npm package name being resolved.
  */
-function resolveDependencyLockKey(
+export function resolveDependencyLockKey(
   requesterLockKey: string | undefined,
   dependencyName: string,
-  packagesByLockKey: Map<string, ResolvedPackage>,
+  packagesByLockKey: ReadonlyMap<string, unknown>,
 ): string | undefined {
   if (requesterLockKey) {
     const nestedKey = `${requesterLockKey}/${dependencyName}`

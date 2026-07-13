@@ -1,4 +1,5 @@
 import type { DuplicatePackageInfo, DuplicateVersionInfo } from "./analyze"
+import { evaluateRangeCompatibility } from "./analyze"
 import type { SuggestedUpdate } from "./update-analyze"
 import type { SkippedUpdate, UpdateSkipReason } from "./update-fix"
 
@@ -10,6 +11,8 @@ const SKIP_REASON_TEXT: Record<UpdateSkipReason, string> = {
   "metadata-unavailable": "registry metadata unavailable",
   "no-integrity": "no integrity hash available",
   "new-dependencies": "update adds dependencies missing from the lockfile",
+  "dependency-conflict":
+    "update needs a dependency version this package cannot reach in the lockfile",
 }
 
 type RemovalReason = {
@@ -66,27 +69,30 @@ function rewriteCannotDedupeAsOrphan(
 
   return duplicates.map((dup) => ({
     ...dup,
-    versions: dup.versions.flatMap((v): DuplicateVersionInfo[] => {
-      if (v.status !== "cannot-dedupe") return [v]
+    versions: dup.versions.map((v): DuplicateVersionInfo => {
+      if (v.status !== "cannot-dedupe") return v
 
       const updatedRequests = v.requests.filter((r) =>
         updateLockKeys.has(r.requesterNodeId),
       )
-      if (updatedRequests.length === 0) return [v]
+      if (updatedRequests.length === 0) return v
 
-      const remainingRequests = v.requests.filter(
-        (r) => !updateLockKeys.has(r.requesterNodeId),
+      // The version disappears only when every remaining request already
+      // accepts the target; a single incompatible co-blocker keeps it pinned,
+      // so claiming removal would misreport the outcome.
+      const removable = v.requests.every(
+        (r) =>
+          updateLockKeys.has(r.requesterNodeId) ||
+          evaluateRangeCompatibility(r.range, dup.targetVersion) === true,
       )
-      const rewrittenVersion: DuplicateVersionInfo = {
+      if (!removable) return v
+
+      return {
         ...v,
         status: "orphan" as const,
         dedupeTargetVersion: undefined,
         requests: updatedRequests,
       }
-
-      if (remainingRequests.length === 0) return [rewrittenVersion]
-
-      return [rewrittenVersion, { ...v, requests: remainingRequests }]
     }),
   }))
 }

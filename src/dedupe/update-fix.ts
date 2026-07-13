@@ -5,6 +5,7 @@ import {
   fetchPackageMetadata,
   type PackageMetadata,
 } from "../registry"
+import { resolveDependencyLockKey } from "./analyze"
 import type { BunPackageEntry, BunPackageMeta } from "./parse"
 import {
   isPackageEntry,
@@ -12,6 +13,7 @@ import {
   parseBunLock,
   parseResolvedSpec,
 } from "./parse"
+import type { DedupeLockResult } from "./rewrite"
 import { dedupeLockText, renderBunLock } from "./rewrite"
 import {
   analyzeDuplicatePackagesWithUpdates,
@@ -24,6 +26,7 @@ export type UpdateSkipReason =
   | "metadata-unavailable"
   | "no-integrity"
   | "new-dependencies"
+  | "dependency-conflict"
 
 export type SkippedUpdate = SuggestedUpdate & {
   /** Why this suggested update was not written by `--update --fix`. */
@@ -126,22 +129,15 @@ function collectPackageSpecs(
 }
 
 /**
- * Check whether applying an intermediate package update can be done without
- * adding brand-new lockfile entries.
- *
- * `--update --fix` only rewrites existing tuples; if the new package version
- * needs a dependency version that is not already present, the update is left for
- * the user and Bun.
- *
- * @param specsByLockKey Package versions already available somewhere in the
- * current lockfile.
+ * Runtime, optional, and non-optional peer dependency ranges that the lockfile
+ * must be able to satisfy for this package version.
  */
-function canReuseExistingDependencyEntries(
+function requiredDependencyRanges(
   meta: PackageMetadata,
-  specsByLockKey: Map<string, { name: string; version: string }>,
-): boolean {
+): Record<string, string> {
   const optionalPeers = collectOptionalPeerNames(meta)
-  const requiredDeps = {
+
+  return {
     ...normalizeDependencyMap(meta.dependencies),
     ...normalizeDependencyMap(meta.optionalDependencies),
     ...Object.fromEntries(
@@ -150,8 +146,30 @@ function canReuseExistingDependencyEntries(
       ),
     ),
   }
+}
 
-  for (const [dependencyName, range] of Object.entries(requiredDeps)) {
+/**
+ * Check whether applying an intermediate package update can be done without
+ * adding brand-new lockfile entries.
+ *
+ * `--update --fix` only rewrites existing tuples; if the new package version
+ * needs a dependency version that is not already present, the update is left for
+ * the user and Bun.
+ *
+ * This is only a cheap global pre-filter; whether the requester can actually
+ * reach a compatible entry is verified contextually by
+ * {@link findContextConflicts} after the update is simulated.
+ *
+ * @param specsByLockKey Package versions already available somewhere in the
+ * current lockfile.
+ */
+function canReuseExistingDependencyEntries(
+  meta: PackageMetadata,
+  specsByLockKey: Map<string, { name: string; version: string }>,
+): boolean {
+  for (const [dependencyName, range] of Object.entries(
+    requiredDependencyRanges(meta),
+  )) {
     const validRange = semver.validRange(range)
     if (!validRange) return false
 
@@ -267,18 +285,144 @@ function applyApplicableUpdates(
   }
 }
 
+/**
+ * Find applied updates whose new metadata cannot be satisfied from their own
+ * resolution context in the final lockfile.
+ *
+ * {@link canReuseExistingDependencyEntries} accepts a compatible version
+ * anywhere in the lockfile, but Bun resolves lock keys contextually: nearest
+ * nested `requester/dep` first, then root. A compatible version that lives
+ * only under an unrelated package is unreachable from the updated requester,
+ * and writing such an update would leave a dependency range that resolves to
+ * an incompatible version.
+ */
+function findContextConflicts(
+  lockText: string,
+  updates: ApplicableUpdate[],
+): Set<ApplicableUpdate> {
+  const packages = parseBunLock(lockText).packages ?? {}
+  const specsByLockKey = collectPackageSpecs(packages)
+  const conflicts = new Set<ApplicableUpdate>()
+
+  for (const applicable of updates) {
+    const { update, meta } = applicable
+    const entry = packages[update.requesterLockKey]
+    // Dedupe may rewrite or prune the updated entry itself; a surviving tuple
+    // with a different spec came from elsewhere in the lockfile and its
+    // metadata was already consistent there.
+    if (
+      !isPackageEntry(entry) ||
+      entry[0] !== `${update.packageName}@${update.toVersion}`
+    ) {
+      continue
+    }
+
+    for (const [dependencyName, range] of Object.entries(
+      requiredDependencyRanges(meta),
+    )) {
+      const resolvedKey = resolveDependencyLockKey(
+        update.requesterLockKey,
+        dependencyName,
+        specsByLockKey,
+      )
+      const resolvedSpec = resolvedKey
+        ? specsByLockKey.get(resolvedKey)
+        : undefined
+      const validRange = semver.validRange(range)
+
+      if (
+        !resolvedSpec ||
+        !validRange ||
+        !semver.satisfies(resolvedSpec.version, validRange, {
+          includePrerelease: true,
+        })
+      ) {
+        conflicts.add(applicable)
+        break
+      }
+    }
+  }
+
+  return conflicts
+}
+
+type UpdatePlan = {
+  applicableUpdates: ApplicableUpdate[]
+  skippedUpdates: SkippedUpdate[]
+  updateResult: ReturnType<typeof applyApplicableUpdates>
+  afterUpdatesText: string
+  dedupeResult: DedupeLockResult
+}
+
+/**
+ * Assess suggested updates, then apply and dedupe until the resulting lockfile
+ * resolves every updated entry's dependencies to compatible versions.
+ *
+ * Each round applies the remaining candidates to a fresh parse of `lockText`,
+ * runs the normal dedupe rewrite, and validates the outcome; updates whose new
+ * dependency ranges the final graph cannot satisfy are moved to
+ * `skippedUpdates` and the batch is re-applied without them. The loop
+ * terminates because every round either ends clean or shrinks the batch.
+ */
+async function planAndApplyUpdates(
+  lockText: string,
+  updates: SuggestedUpdate[],
+  options?: UpdateAnalysisOptions,
+): Promise<UpdatePlan> {
+  const assessment = await assessSuggestedUpdates(
+    parseBunLock(lockText).packages ?? {},
+    updates,
+    options,
+  )
+  let applicableUpdates = assessment.applicableUpdates
+  const skippedUpdates = [...assessment.skippedUpdates]
+
+  while (true) {
+    const parsedLock = parseBunLock(lockText)
+    const packages = parsedLock.packages ?? {}
+    parsedLock.packages = packages
+
+    const updateResult = applyApplicableUpdates(packages, applicableUpdates)
+    const afterUpdatesText =
+      updateResult.updatedEntries > 0 ? renderBunLock(parsedLock) : lockText
+    const dedupeResult = dedupeLockText(afterUpdatesText)
+    const finalText = dedupeResult.changed
+      ? dedupeResult.lockText
+      : afterUpdatesText
+
+    const conflicts = findContextConflicts(finalText, applicableUpdates)
+    if (conflicts.size === 0) {
+      return {
+        applicableUpdates,
+        skippedUpdates,
+        updateResult,
+        afterUpdatesText,
+        dedupeResult,
+      }
+    }
+
+    for (const conflict of conflicts) {
+      skippedUpdates.push({
+        ...conflict.update,
+        skipReason: "dependency-conflict",
+      })
+    }
+    applicableUpdates = applicableUpdates.filter(
+      (applicable) => !conflicts.has(applicable),
+    )
+  }
+}
+
 export async function classifyUpdateSafety(
   lockText: string,
   updates: SuggestedUpdate[],
   options?: UpdateAnalysisOptions,
 ): Promise<UpdateSafetyResult> {
-  const parsedLock = parseBunLock(lockText)
-  const packages = parsedLock.packages ?? {}
-  const assessment = await assessSuggestedUpdates(packages, updates, options)
+  const plan = await planAndApplyUpdates(lockText, updates, options)
 
   return {
-    applicableUpdates: assessment.applicableUpdates.map(({ update }) => update),
-    skippedUpdates: assessment.skippedUpdates,
+    applicableUpdates: plan.applicableUpdates.map(({ update }) => update),
+    skippedUpdates: plan.skippedUpdates,
   }
 }
 
@@ -295,29 +439,23 @@ export async function updateAndDedupeLockText(
   const cache = options?.cache ?? createPackumentCache()
   const sharedOptions: UpdateAnalysisOptions = { ...options, cache }
 
-  const parsedLock = parseBunLock(lockText)
   // Reuse a caller-provided analysis (e.g. when the CLI already ran one for
   // its report) instead of re-running the registry-bound pass twice.
   const suggestedUpdates =
     options?.suggestedUpdates ??
-    (await analyzeDuplicatePackagesWithUpdates(parsedLock, sharedOptions))
-      .suggestedUpdates
-  const packages = parsedLock.packages ?? {}
-  parsedLock.packages = packages
+    (
+      await analyzeDuplicatePackagesWithUpdates(
+        parseBunLock(lockText),
+        sharedOptions,
+      )
+    ).suggestedUpdates
 
-  const assessment = await assessSuggestedUpdates(
-    packages,
+  const plan = await planAndApplyUpdates(
+    lockText,
     suggestedUpdates,
     sharedOptions,
   )
-  const updateResult = applyApplicableUpdates(
-    packages,
-    assessment.applicableUpdates,
-  )
-
-  const afterUpdatesText =
-    updateResult.updatedEntries > 0 ? renderBunLock(parsedLock) : lockText
-  const dedupeResult = dedupeLockText(afterUpdatesText)
+  const { updateResult, dedupeResult, afterUpdatesText } = plan
 
   return {
     changed: updateResult.updatedEntries > 0 || dedupeResult.changed,
@@ -328,6 +466,6 @@ export async function updateAndDedupeLockText(
     dedupedPackages: dedupeResult.rewrittenPackages,
     suggestedUpdates,
     appliedUpdates: updateResult.appliedUpdates,
-    skippedUpdates: assessment.skippedUpdates,
+    skippedUpdates: plan.skippedUpdates,
   }
 }

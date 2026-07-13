@@ -25,7 +25,7 @@
       "2.1.0": {
         "version": "2.1.0",
         "dependencies": {
-          "shared-dep": "^1.0.0"
+          "shared-dep": "^2.0.0"
         },
         "dist": {
           "integrity": "sha512-fixture-2.1.0"

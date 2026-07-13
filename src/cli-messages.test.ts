@@ -5,10 +5,12 @@ import {
   countCannotDedupePackages,
   formatFixSummary,
   formatReportSummary,
+  formatUpdateFixReport,
   formatUpdateFixSummary,
   type ReportSummary,
 } from "./cli-messages"
 import type { DuplicatePackageInfo, SuggestedUpdate } from "./dedupe"
+import { analyzeDuplicatePackages, parseBunLock } from "./dedupe"
 
 const lockPath = "/project/bun.lock"
 
@@ -473,5 +475,111 @@ describe("formatUpdateFixSummary", () => {
       "Updated 1 entry across 1 intermediate package and deduped 1 entry across 1 package in /project/bun.lock.\n" +
         "1 more package could be deduped by manually updating 1 intermediate dependency.",
     )
+  })
+})
+
+// --- formatUpdateFixReport ---
+
+describe("formatUpdateFixReport", () => {
+  const originalLock = `{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": { "name": "myapp", "dependencies": { "app-blocking": "^1.0.0", "shared-dep": "^2.0.0" } }
+  },
+  "packages": {
+    "app-blocking": ["app-blocking@1.0.0", "", { "dependencies": { "shared-dep": "^1.0.0" } }, "sha-old"],
+    "app-blocking/shared-dep": ["shared-dep@1.5.0", "", {}, "sha-nested"],
+    "shared-dep": ["shared-dep@2.1.0", "", {}, "sha-root"]
+  }
+}
+`
+  const updatedLock = `{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": { "name": "myapp", "dependencies": { "app-blocking": "^1.0.0", "shared-dep": "^2.0.0" } }
+  },
+  "packages": {
+    "app-blocking": ["app-blocking@1.1.0", "", { "dependencies": { "shared-dep": "^2.0.0" } }, "sha-new"],
+    "shared-dep": ["shared-dep@2.1.0", "", {}, "sha-root"]
+  }
+}
+`
+  const update: SuggestedUpdate = {
+    requesterLockKey: "app-blocking",
+    packageName: "app-blocking",
+    fromVersion: "1.0.0",
+    toVersion: "1.1.0",
+    deduplicates: [
+      { name: "shared-dep", fromVersion: "1.5.0", targetVersion: "2.1.0" },
+    ],
+    constrainedBy: [
+      {
+        requesterLabel: "myapp (workspace)",
+        requesterPath: ["myapp"],
+        range: "^1.0.0",
+      },
+    ],
+  }
+
+  test("reports the final lockfile instead of the pre-update analysis", () => {
+    const preDuplicates = analyzeDuplicatePackages(parseBunLock(originalLock))
+
+    const report = formatUpdateFixReport(
+      preDuplicates,
+      {
+        changed: true,
+        lockText: updatedLock,
+        updatedEntries: 1,
+        updatedPackages: 1,
+        dedupedEntries: 1,
+        dedupedPackages: 1,
+        suggestedUpdates: [update],
+        appliedUpdates: [update],
+        skippedUpdates: [],
+      },
+      lockPath,
+    )
+
+    // The duplicate group no longer exists in the written lockfile, so the
+    // body must not describe it as pending work.
+    expect(report).toBe(
+      "No fixable duplicate packages found in bun.lock.\n\n" +
+        "Updated 1 entry across 1 intermediate package and deduped 1 entry across 1 package in /project/bun.lock.",
+    )
+  })
+
+  test("annotates persisting blockers with skipped updates when nothing changed", () => {
+    const preDuplicates = analyzeDuplicatePackages(parseBunLock(originalLock))
+    const skipped = { ...update, skipReason: "dependency-conflict" as const }
+
+    const report = formatUpdateFixReport(
+      preDuplicates,
+      {
+        changed: false,
+        lockText: originalLock,
+        updatedEntries: 0,
+        updatedPackages: 0,
+        dedupedEntries: 0,
+        dedupedPackages: 0,
+        suggestedUpdates: [update],
+        appliedUpdates: [],
+        skippedUpdates: [skipped],
+      },
+      lockPath,
+    )
+
+    expect(report).toContain("✋ 1.5.0 → 2.1.0")
+    expect(report).toContain("- app-blocking: 1.0.0 → 1.1.0")
+    expect(report).toContain(
+      "held back: update needs a dependency version this package cannot reach in the lockfile",
+    )
+    expect(report).toContain("No update fixes applied to /project/bun.lock.")
+    expect(report).toContain(
+      "1 more package could be deduped by manually updating 1 intermediate dependency.",
+    )
+    // The skipped update must not be rendered as an already-removed orphan.
+    expect(report).not.toContain("🗑️")
   })
 })

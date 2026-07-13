@@ -135,3 +135,5 @@ shared-dep:
           - myapp > other-dep: ^1.2.0
         held back: update adds dependencies missing from the lockfile
 ```
+
+An update is only suggested when it would actually remove a duplicate version: if another package keeps that version pinned and has no usable update of its own, no update is offered.

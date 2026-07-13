@@ -1,7 +1,12 @@
 import type { DuplicatePackageInfo } from "./dedupe/analyze"
+import { analyzeDuplicatePackages } from "./dedupe/analyze"
 import { formatDuplicatesReport, updateIdentity } from "./dedupe/format"
+import { parseBunLock } from "./dedupe/parse"
 import type { SuggestedUpdate } from "./dedupe/update-analyze"
-import type { SkippedUpdate } from "./dedupe/update-fix"
+import type {
+  SkippedUpdate,
+  UpdateAndDedupeLockResult,
+} from "./dedupe/update-fix"
 
 function plural(count: number, one: string, many: string): string {
   return count === 1 ? `${count} ${one}` : `${count} ${many}`
@@ -220,6 +225,72 @@ export function formatFixSummary(
       ? `\n${plural(summary.remainingPackages, "package", "packages")} cannot be deduped.`
       : ""
   return `Deduped ${plural(summary.fixedEntries, "entry", "entries")} across ${plural(summary.fixedPackages, "package", "packages")} in ${lockPath}.${remainingNote}`
+}
+
+// --- Update fix report (--update --fix) ---
+
+function countUniqueSkippedDedupePackages(updates: SuggestedUpdate[]): number {
+  return new Set(
+    updates.flatMap((update) => update.deduplicates.map((d) => d.name)),
+  ).size
+}
+
+function buildSkippedUpdateSummary(updates: SkippedUpdate[]): {
+  skippedUpdateCount: number
+  skippedPackageCount: number
+  skippedDedupePackageCount: number
+} {
+  return {
+    skippedUpdateCount: updates.length,
+    skippedPackageCount: new Set(updates.map((update) => update.packageName))
+      .size,
+    skippedDedupePackageCount: countUniqueSkippedDedupePackages(updates),
+  }
+}
+
+/**
+ * Build the full `--update --fix` output.
+ *
+ * The report body describes the lockfile as written: applied updates and
+ * dedupes are already reflected in the re-analysis of `result.lockText`, while
+ * skipped updates still annotate the blockers they could not fix.
+ *
+ * @param preUpdateDuplicates Analysis of the lockfile before updates; reused
+ * verbatim when nothing changed.
+ */
+export function formatUpdateFixReport(
+  preUpdateDuplicates: DuplicatePackageInfo[],
+  result: UpdateAndDedupeLockResult,
+  lockPath: string,
+  options?: { includeUnfixable?: boolean },
+): string {
+  const finalDuplicates = result.changed
+    ? analyzeDuplicatePackages(parseBunLock(result.lockText))
+    : preUpdateDuplicates
+
+  return formatReportOutput(
+    formatDuplicatesReport(finalDuplicates, {
+      includeUnfixable: options?.includeUnfixable,
+      suggestedUpdates: result.skippedUpdates,
+      skippedUpdates: result.skippedUpdates,
+    }),
+    formatUpdateFixSummary(
+      result.changed
+        ? {
+            kind: "updated",
+            updatedEntries: result.updatedEntries,
+            updatedPackages: result.updatedPackages,
+            dedupedEntries: result.dedupedEntries,
+            dedupedPackages: result.dedupedPackages,
+            ...buildSkippedUpdateSummary(result.skippedUpdates),
+          }
+        : {
+            kind: "no-change",
+            ...buildSkippedUpdateSummary(result.skippedUpdates),
+          },
+      lockPath,
+    ),
+  )
 }
 
 // --- Update fix summary (--update --fix) ---

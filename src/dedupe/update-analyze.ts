@@ -7,7 +7,11 @@ import {
   type PackumentCache,
 } from "../registry"
 import type { DuplicatePackageInfo } from "./analyze"
-import { analyzeDuplicatePackages, evaluateRangeCompatibility } from "./analyze"
+import {
+  analyzeDuplicatePackages,
+  evaluateRangeCompatibility,
+  resolveDependencyLockKey,
+} from "./analyze"
 import type { BunLockFile } from "./parse"
 import {
   isPackageEntry,
@@ -185,57 +189,6 @@ function collectPackageNamesByLockKey(lock: BunLockFile): Map<string, string> {
   }
 
   return namesByLockKey
-}
-
-/**
- * Lightweight resolver used while building update constraints.
- *
- * This mirrors the analyzer resolver but only needs package names, not full
- * package metadata.
- */
-function resolveDependencyLockKey(
-  requesterLockKey: string | undefined,
-  dependencyName: string,
-  namesByLockKey: Map<string, string>,
-): string | undefined {
-  if (requesterLockKey) {
-    const nestedKey = `${requesterLockKey}/${dependencyName}`
-    if (namesByLockKey.has(nestedKey)) return nestedKey
-  }
-
-  if (namesByLockKey.has(dependencyName)) return dependencyName
-
-  if (!requesterLockKey) {
-    let uniqueCandidate: string | undefined
-    for (const [lockKey, packageName] of namesByLockKey) {
-      if (packageName !== dependencyName) continue
-
-      if (uniqueCandidate) return undefined
-
-      uniqueCandidate = lockKey
-    }
-
-    return uniqueCandidate
-  }
-
-  let bestCandidate: string | undefined
-  let bestPrefixLength = -1
-  for (const [lockKey, packageName] of namesByLockKey) {
-    if (packageName !== dependencyName) continue
-
-    const prefix = lockKey.slice(0, -(dependencyName.length + 1))
-    if (
-      requesterLockKey === prefix ||
-      requesterLockKey.startsWith(`${prefix}/`)
-    ) {
-      if (prefix.length > bestPrefixLength) {
-        bestCandidate = lockKey
-        bestPrefixLength = prefix.length
-      }
-    }
-  }
-
-  return bestCandidate
 }
 
 function addInboundRange(
@@ -514,6 +467,50 @@ async function findBestCandidate(
 }
 
 /**
+ * Drop suggestions that cannot actually unlock a dedupe.
+ *
+ * A duplicate version becomes removable only when every inbound request either
+ * already accepts the target version or is fixed by an update in the same run.
+ * When a co-blocker has no update candidate (no newer version, or the pin
+ * lives in a workspace manifest), updating the other blockers would not remove
+ * the duplicate — it would only rewrite a requester onto metadata whose
+ * dependency range the resulting lockfile cannot satisfy.
+ */
+function pruneIncompleteUnlocks(
+  suggestedUpdates: SuggestedUpdate[],
+  duplicates: DuplicatePackageInfo[],
+): SuggestedUpdate[] {
+  const updatedRequesters = new Set(
+    suggestedUpdates.map((update) => update.requesterLockKey),
+  )
+  const stuckVersions = new Set<string>()
+
+  for (const duplicate of duplicates) {
+    for (const versionInfo of duplicate.versions) {
+      if (versionInfo.status !== "cannot-dedupe") continue
+
+      const unlockable = versionInfo.requests.every(
+        (request) =>
+          evaluateRangeCompatibility(request.range, duplicate.targetVersion) ===
+            true || updatedRequesters.has(request.requesterNodeId),
+      )
+      if (!unlockable) {
+        stuckVersions.add(`${duplicate.name}@${versionInfo.version}`)
+      }
+    }
+  }
+
+  return suggestedUpdates
+    .map((update) => ({
+      ...update,
+      deduplicates: update.deduplicates.filter(
+        (unlock) => !stuckVersions.has(`${unlock.name}@${unlock.fromVersion}`),
+      ),
+    }))
+    .filter((update) => update.deduplicates.length > 0)
+}
+
+/**
  * Analyze duplicates and suggest intermediate package updates that would make
  * currently incompatible duplicate versions removable.
  *
@@ -544,8 +541,9 @@ export async function analyzeDuplicatePackagesWithUpdates(
       return result
     }),
   )
-  const suggestedUpdates = results.filter(
-    (u): u is SuggestedUpdate => u !== null,
+  const suggestedUpdates = pruneIncompleteUnlocks(
+    results.filter((u): u is SuggestedUpdate => u !== null),
+    duplicates,
   )
 
   suggestedUpdates.sort((a, b) => {

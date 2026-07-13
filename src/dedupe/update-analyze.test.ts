@@ -278,6 +278,134 @@ describe("analyzeDuplicatePackagesWithUpdates", () => {
     expect(report).not.toContain("required by: alpha")
   })
 
+  test("drops suggestions that cannot remove a duplicate pinned by a co-blocker", async () => {
+    // Mirrors the vue-tsc/@golar/vue case: the duplicate's target version
+    // exists only in foreign nested entries, and one of the two blockers has
+    // no newer version, so updating the other blocker cannot dedupe anything.
+    const packages: Record<string, BunPackageEntry> = {
+      "app-blocking": [
+        "app-blocking@1.0.0",
+        "",
+        { dependencies: { "shared-dep": "2.0.0" } },
+        "sha",
+      ],
+      "pinned-parent": [
+        "pinned-parent@1.0.0",
+        "",
+        { dependencies: { "shared-dep": "2.0.0" } },
+        "sha",
+      ],
+      "other-parent": [
+        "other-parent@1.0.0",
+        "",
+        { dependencies: { "shared-dep": "3.0.0" } },
+        "sha",
+      ],
+      "other-parent/shared-dep": ["shared-dep@3.0.0", "", {}, "sha"],
+      "shared-dep": ["shared-dep@2.0.0", "", {}, "sha"],
+    }
+    const lock = {
+      lockfileVersion: 1,
+      configVersion: 1,
+      workspaces: {
+        "": {
+          name: "myapp",
+          dependencies: {
+            "app-blocking": "^1.0.0",
+            "other-parent": "^1.0.0",
+            "pinned-parent": "^1.0.0",
+          },
+        },
+      },
+      packages,
+    } satisfies BunLockFile
+
+    const registry = makeRegistry(
+      {
+        "app-blocking": ["1.0.0", "1.1.0"],
+        "pinned-parent": ["1.0.0"],
+      },
+      {
+        "app-blocking": {
+          "1.1.0": {
+            version: "1.1.0",
+            dependencies: { "shared-dep": "3.0.0" },
+          },
+        },
+      },
+    )
+
+    const { suggestedUpdates } = await analyzeDuplicatePackagesWithUpdates(
+      lock,
+      { fetchFn: registry },
+    )
+
+    expect(suggestedUpdates).toEqual([])
+  })
+
+  test("keeps a suggestion but prunes co-blocked unlocks from its deduplicates", async () => {
+    const packages: Record<string, BunPackageEntry> = {
+      "app-blocking": [
+        "app-blocking@1.0.0",
+        "",
+        { dependencies: { "dup-free": "1.0.0", "dup-pinned": "1.0.0" } },
+        "sha",
+      ],
+      "app-blocking/dup-free": ["dup-free@1.0.0", "", {}, "sha"],
+      "app-blocking/dup-pinned": ["dup-pinned@1.0.0", "", {}, "sha"],
+      "pinned-parent": [
+        "pinned-parent@1.0.0",
+        "",
+        { dependencies: { "dup-pinned": "1.0.0" } },
+        "sha",
+      ],
+      "pinned-parent/dup-pinned": ["dup-pinned@1.0.0", "", {}, "sha"],
+      "dup-free": ["dup-free@2.0.0", "", {}, "sha"],
+      "dup-pinned": ["dup-pinned@2.0.0", "", {}, "sha"],
+    }
+    const lock = {
+      lockfileVersion: 1,
+      configVersion: 1,
+      workspaces: {
+        "": {
+          name: "myapp",
+          dependencies: {
+            "app-blocking": "^1.0.0",
+            "dup-free": "^2.0.0",
+            "dup-pinned": "^2.0.0",
+            "pinned-parent": "^1.0.0",
+          },
+        },
+      },
+      packages,
+    } satisfies BunLockFile
+
+    const registry = makeRegistry(
+      {
+        "app-blocking": ["1.0.0", "1.1.0"],
+        "pinned-parent": ["1.0.0"],
+      },
+      {
+        "app-blocking": {
+          "1.1.0": {
+            version: "1.1.0",
+            dependencies: { "dup-free": "2.0.0", "dup-pinned": "2.0.0" },
+          },
+        },
+      },
+    )
+
+    const { suggestedUpdates } = await analyzeDuplicatePackagesWithUpdates(
+      lock,
+      { fetchFn: registry },
+    )
+
+    expect(suggestedUpdates).toHaveLength(1)
+    expect(suggestedUpdates[0]?.deduplicates).toEqual([
+      { name: "dup-free", fromVersion: "1.0.0", targetVersion: "2.0.0" },
+    ])
+  })
+
   test("returns no suggestions when no compatible newer version exists", async () => {
     const registry = makeRegistry({ "app-blocking": ["1.0.0"] }, {})
 
