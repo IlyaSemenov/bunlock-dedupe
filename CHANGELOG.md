@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.6.3
+
+### Patch Changes
+
+- cd0638c: Remove redundant nested packages after deduping dependencies of scoped packages.
+
 ## 1.6.2
 
 ### Patch Changes
