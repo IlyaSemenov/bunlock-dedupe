@@ -24,9 +24,11 @@ Treat README.md as the user-facing behavior contract.
 - Never write a lockfile in which a dependency range resolves to an incompatible version; `--update --fix` must validate the simulated final lockfile and skip offending updates.
 - Dedupe rewrites operate per package version, not per lock entry: a version is rewritten only when every inbound request accepts the target.
 - For a package requester, normal dependency lookup order is exact `requester/dependency`, closest ancestor-provided nested entry, then root `dependency`.
+- For context-free lookup, use the root entry first and accept a nested entry only when it is the unique candidate.
 - Use `resolveDependencyLockKey` from `analyze.ts` for normal lookup; `resolveFallbackLockKey` in `rewrite.ts` is only for simulating lookup with an entry removed and must keep the same ancestor-before-root precedence.
-- Use lock keys and requester node IDs for identity and safety decisions; `requestPath` is display-only because shared graph nodes keep only one explanatory path.
-- Preserve package key order during rendering because re-sorting creates parasitic diffs from Bun's resolution order.
+- Use lock keys and requester node IDs for identity and safety decisions; use `requestPath` only for display.
+- Preserve package key order during rendering.
+- Sort dependency maps created from registry metadata by package name before rendering.
 - Do not copy context-specific package tuple metadata such as `bundled` when reusing an entry as a rewrite template.
 
 ## Fixtures

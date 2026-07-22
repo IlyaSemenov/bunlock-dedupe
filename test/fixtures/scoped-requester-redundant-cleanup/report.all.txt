@@ -1,0 +1,21 @@
+nanoid:
+  ✅ 3.3.16
+    used by:
+      - example > @tailwindcss/postcss > postcss: ^3.3.16
+  ⬆️ 3.3.13 → 3.3.16
+    used by:
+      - example: ^3.3.0
+      - example > postcss: ^3.3.12
+
+postcss:
+  ✅ 8.5.22
+    used by:
+      - example > @tailwindcss/postcss: ^8.5.16
+  ⬆️ 8.5.15 → 8.5.22
+    used by:
+      - example: ^8.5.0
+
+2 duplicate packages in bun.lock.
+2 packages can be deduped.
+
+Run with --fix to apply available dedupes.

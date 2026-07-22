@@ -1,4 +1,8 @@
-import { analyzeDuplicatePackages, type DuplicatePackageInfo } from "./analyze"
+import {
+  analyzeDuplicatePackages,
+  type DuplicatePackageInfo,
+  isNestedDependencyLockKey,
+} from "./analyze"
 import {
   type BunLockFile,
   type BunPackageEntry,
@@ -113,7 +117,10 @@ function resolveFallbackLockKey(
   let bestCandidate: string | undefined
   let bestPrefixLength = -1
   for (const key of Object.keys(packages)) {
-    if (key === excludedKey || !key.endsWith(`/${dependencyName}`)) {
+    if (
+      key === excludedKey ||
+      !isNestedDependencyLockKey(key, dependencyName)
+    ) {
       continue
     }
 

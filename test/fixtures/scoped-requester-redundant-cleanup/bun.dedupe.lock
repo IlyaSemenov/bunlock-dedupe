@@ -1,0 +1,21 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "dependencies": {
+        "@tailwindcss/postcss": "4.3.3",
+        "nanoid": "^3.3.0",
+        "postcss": "^8.5.0",
+      },
+    },
+  },
+  "packages": {
+    "@tailwindcss/postcss": ["@tailwindcss/postcss@4.3.3", "", { "dependencies": { "postcss": "^8.5.16" } }, "sha-parent"],
+
+    "nanoid": ["nanoid@3.3.16", "", {}, "sha-nanoid-new"],
+
+    "postcss": ["postcss@8.5.22", "", { "dependencies": { "nanoid": "^3.3.16" } }, "sha-postcss-new"],
+  }
+}

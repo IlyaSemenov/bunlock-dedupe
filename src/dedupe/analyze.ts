@@ -103,6 +103,22 @@ type OrphanDetectionContext = {
 }
 
 /**
+ * Tell nested dependency keys apart from root scoped package keys.
+ *
+ * For an unscoped dependency, `@scope/name` can match the `/name` suffix even
+ * though it is a root package key. A real nested key has another path segment,
+ * such as `@scope/requester/name`.
+ */
+export function isNestedDependencyLockKey(
+  lockKey: string,
+  dependencyName: string,
+): boolean {
+  if (!lockKey.endsWith(`/${dependencyName}`)) return false
+
+  return dependencyName.startsWith("@") || !/^@[^/]+\/[^/]+$/.test(lockKey)
+}
+
+/**
  * Resolve a dependency the way Bun lock keys are structured:
  * nearest nested `requester/dependency` wins, then the closest
  * ancestor-provided nested entry, then root `dependency`.
@@ -129,7 +145,7 @@ export function resolveDependencyLockKey(
     let bestCandidate: string | undefined
     let bestPrefixLength = -1
     for (const key of packagesByLockKey.keys()) {
-      if (!key.endsWith(`/${dependencyName}`)) {
+      if (!isNestedDependencyLockKey(key, dependencyName)) {
         continue
       }
 
@@ -157,7 +173,7 @@ export function resolveDependencyLockKey(
   if (!requesterLockKey) {
     let uniqueCandidate: string | undefined
     for (const key of packagesByLockKey.keys()) {
-      if (!key.endsWith(`/${dependencyName}`)) {
+      if (!isNestedDependencyLockKey(key, dependencyName)) {
         continue
       }
 
