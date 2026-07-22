@@ -1,6 +1,6 @@
 {
   "name": "bunlock-dedupe",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "Analyze and deduplicate bun.lock dependencies",
   "author": "Ilya Semenov",
   "type": "module",
