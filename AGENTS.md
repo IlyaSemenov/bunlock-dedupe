@@ -5,8 +5,8 @@ Treat README.md as the user-facing behavior contract.
 
 ## Commands
 
-- `bun test` runs the test suite, and `bun run types` runs the typecheck.
-- `bun run lint` runs Biome with auto-fixes, and `bun run check` includes that mutating lint step after the typecheck.
+- Run tests with `bun test` and typecheck with `bun run types`.
+- `bun run lint` and `bun run check` invoke Biome with auto-fixes; treat both as mutating commands.
 
 ## Code map
 
