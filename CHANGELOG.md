@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.6.4
+
+### Patch Changes
+
+- 9898a14: Separate requests that block deduplication from other consumers of the same incompatible version.
+
 ## 1.6.3
 
 ### Patch Changes
