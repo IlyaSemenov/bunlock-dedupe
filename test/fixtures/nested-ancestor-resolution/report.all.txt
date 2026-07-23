@@ -6,7 +6,7 @@ unplugin:
     used by:
       - example > ui: ^3.0.0
   ❌ 2.3.11
-    used by:
+    blocked by:
       - example > ui > auto-import: ^2.3.11
       - example > ui > auto-import > unimport: ^2.3.11
 

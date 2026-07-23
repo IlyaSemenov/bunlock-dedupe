@@ -3,10 +3,10 @@
     used by:
       - example > @nuxt/ui: ^14.1.0
   ❌ 12.8.2
-    used by:
+    blocked by:
       - example > reka-ui: ^12.5.0
   ❌ 10.11.1
-    used by:
+    blocked by:
       - example > vaul-vue: ^10.8.0
 
 1 duplicate package in bun.lock.

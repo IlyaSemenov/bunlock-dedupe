@@ -301,6 +301,12 @@ function renderPath(request: DuplicateVersionInfo["requests"][number]): string {
   return request.requestPath.join(" > ")
 }
 
+function formatRequest(
+  request: DuplicateVersionInfo["requests"][number],
+): string {
+  return `${renderPath(request)}: ${request.range}`
+}
+
 function pushSection(
   lines: string[],
   title: string,
@@ -477,13 +483,30 @@ export function formatDuplicatesReport(
     for (const versionInfo of duplicate.versions) {
       lines.push(`  ${formatVersionLine(versionInfo)}`)
 
-      pushSection(
-        lines,
-        "used by",
-        versionInfo.requests.map(
-          (request) => `${renderPath(request)}: ${request.range}`,
-        ),
-      )
+      if (
+        versionInfo.status === "cannot-dedupe" &&
+        versionInfo.displayStatus !== "manual-update"
+      ) {
+        const blockedBy: typeof versionInfo.requests = []
+        const alsoUsedBy: typeof versionInfo.requests = []
+
+        for (const request of versionInfo.requests) {
+          const targetCompatible = evaluateRangeCompatibility(
+            request.range,
+            duplicate.targetVersion,
+          )
+          if (targetCompatible === false) {
+            blockedBy.push(request)
+          } else {
+            alsoUsedBy.push(request)
+          }
+        }
+
+        pushSection(lines, "blocked by", blockedBy.map(formatRequest))
+        pushSection(lines, "also used by", alsoUsedBy.map(formatRequest))
+      } else {
+        pushSection(lines, "used by", versionInfo.requests.map(formatRequest))
+      }
       pushSection(
         lines,
         "removed after",

@@ -4,7 +4,7 @@ pathe:
       - myapp: ^2.0.0
       - myapp > color-lib > kit: ^2.0.0
   ❌ 1.1.2
-    used by:
+    blocked by:
       - myapp > color-lib: ^1.0.0
 
 ws:

@@ -58,8 +58,10 @@ react:
     used by:
       - myapp: ^19.0.0
   ❌ 18.3.1
-    used by:
+    blocked by:
       - myapp > react-pdf: ^18.0.0
+    also used by:
+      - myapp > react-inspector: >=18.0.0
 
 @types/node:
   ✅ 22.13.0

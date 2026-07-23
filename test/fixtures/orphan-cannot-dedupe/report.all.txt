@@ -3,7 +3,7 @@ utils:
     used by:
       - example > app-b: ^2.0.0
   ❌ 1.2.0
-    used by:
+    blocked by:
       - example > app-a: ^1.0.0
       - example > app-c: ^1.0.0
 

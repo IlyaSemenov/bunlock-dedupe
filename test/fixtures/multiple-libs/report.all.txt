@@ -4,7 +4,7 @@ alpha-lib:
       - sandbox: ^3.0.0
       - sandbox > app-b: ^3.0.0
   ❌ 2.9.9
-    used by:
+    blocked by:
       - sandbox > app-a: ^2.8.0
 
 beta-lib:
@@ -13,7 +13,7 @@ beta-lib:
       - sandbox: ^2.2.0
       - sandbox > app-b: ^2.0.0
   ❌ 2.1.7
-    used by:
+    blocked by:
       - sandbox > app-a: ~2.1.0
 
 gamma-lib:
@@ -24,7 +24,7 @@ gamma-lib:
     used by:
       - sandbox > app-a: ^1.4.0
   ❌ 1.4.3
-    used by:
+    blocked by:
       - sandbox > app-c: ~1.4.0
 
 3 duplicate packages in bun.lock.
