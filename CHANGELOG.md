@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.7.0
+
+### Minor Changes
+
+- 3abee5a: Cache registry metadata between update scans, with `--refresh` to revalidate it and `--clear-cache` to remove stored data.
+
 ## 1.6.5
 
 ### Patch Changes
