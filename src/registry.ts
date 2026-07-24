@@ -23,6 +23,8 @@ type Packument = {
   versions?: Record<string, PackageMetadata>
 }
 
+const REGISTRY_RETRY_DELAYS_MS = [250, 500, 1000] as const
+
 /**
  * Thrown when a registry request fails transiently (network error, 5xx, rate
  * limit, malformed JSON) rather than confirming that a package does not exist.
@@ -68,7 +70,12 @@ type RegistryOptions = {
   ) => Promise<Response>
   readDirFn?: (path: string) => string[]
   readFileFn?: (path: string) => string
+  retryDelayFn?: (delayMs: number) => Promise<void>
   cache?: PackumentCache
+}
+
+function wait(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs))
 }
 
 function encodePackageNameForRegistryPath(packageName: string): string {
@@ -179,9 +186,9 @@ function readCacheEntries(
  * callers (e.g. several `Promise.all` branches that resolve to the same
  * package name) share one network request. Only confirmed outcomes are kept:
  * 200 OK packuments and 404 misses (a `null` result) stay cached. Transient
- * failures (network errors, 5xx, malformed JSON) throw {@link RegistryError}
- * and evict the in-flight entry, so the run aborts instead of being silently
- * skewed by data that never arrived.
+ * failures (network errors, 5xx, malformed JSON) are retried 3 times and
+ * then throw {@link RegistryError}. A final failure evicts the in-flight entry,
+ * so a later call can try again instead of replaying a rejected promise.
  */
 async function fetchPackument(
   packageName: string,
@@ -214,34 +221,48 @@ async function fetchPackument(
     }
 
     const fetchImpl = options.fetchFn ?? fetch
+    const retryDelayFn = options.retryDelayFn ?? wait
     const encodedName = encodePackageNameForRegistryPath(packageName)
-    let response: Response
-    try {
-      response = await fetchImpl(`https://registry.npmjs.org/${encodedName}`, {
+    const fetchOnce = (): Promise<Packument | null> =>
+      fetchImpl(`https://registry.npmjs.org/${encodedName}`, {
         headers: { Accept: "application/vnd.npm.install-v1+json" },
       })
-    } catch (error) {
-      throw new RegistryError(packageName, "network request failed", {
-        cause: error,
-      })
-    }
+        .catch((error: unknown) => {
+          throw new RegistryError(packageName, "network request failed", {
+            cause: error,
+          })
+        })
+        .then((response) => {
+          // A genuine 404 confirms the package does not exist — a cacheable
+          // `null`, not a transient failure.
+          if (response.status === 404) return null
+          if (!response.ok) {
+            throw new RegistryError(
+              packageName,
+              `registry responded with status ${response.status}`,
+            )
+          }
 
-    // A genuine 404 confirms the package does not exist — a cacheable `null`,
-    // not a transient failure.
-    if (response.status === 404) return null
-    if (!response.ok) {
-      throw new RegistryError(
-        packageName,
-        `registry responded with status ${response.status}`,
-      )
-    }
-    try {
-      return (await response.json()) as Packument
-    } catch (error) {
-      throw new RegistryError(packageName, "malformed registry response", {
-        cause: error,
+          return response.json().catch((error: unknown) => {
+            throw new RegistryError(
+              packageName,
+              "malformed registry response",
+              { cause: error },
+            )
+          })
+        })
+
+    const fetchWithRetries = (attempt = 0): Promise<Packument | null> =>
+      fetchOnce().catch(async (error: unknown) => {
+        const delayMs = REGISTRY_RETRY_DELAYS_MS[attempt]
+        if (!(error instanceof RegistryError) || delayMs === undefined) {
+          throw error
+        }
+        await retryDelayFn(delayMs)
+        return fetchWithRetries(attempt + 1)
       })
-    }
+
+    return fetchWithRetries()
   })()
 
   cache?.set(packageName, promise)
