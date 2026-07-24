@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.7.1
+
+### Patch Changes
+
+- c5e44bc: When a broken `bun.lock` resolves a dependency outside its declared range, duplicate reports now identify the invalid resolution.
+
 ## 1.7.0
 
 ### Minor Changes
