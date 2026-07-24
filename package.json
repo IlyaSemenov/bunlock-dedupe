@@ -46,6 +46,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "env-paths": "^4.0.0",
     "json5": "^2.2.3",
     "semver": "^7.7.4"
   }

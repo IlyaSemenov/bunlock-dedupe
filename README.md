@@ -14,6 +14,7 @@ bunx bunlock-dedupe --all               # show all duplicates, including unfixab
 bunx bunlock-dedupe --fix               # rewrite the lockfile
 bunx bunlock-dedupe --update            # find updates that unlock deduplication
 bunx bunlock-dedupe --update --fix      # apply those updates and dedupe
+bunx bunlock-dedupe --update --refresh  # revalidate cached registry data
 bunx bunlock-dedupe --update --offline  # analyze using only the local bun cache
 ```
 
@@ -139,3 +140,23 @@ shared-dep:
 ```
 
 An update is only suggested when it would actually remove a duplicate version: if another package keeps that version pinned and has no usable update of its own, no update is offered.
+
+## Registry cache
+
+The persistent cache is created only when `--update` runs without `--offline`.
+Registry responses are cached for five minutes in the system cache directory and revalidated afterward.
+Use `--refresh` to revalidate them immediately.
+
+Cache locations are:
+
+- macOS: `~/Library/Caches/bunlock-dedupe/registry-v1`
+- Linux: `$XDG_CACHE_HOME/bunlock-dedupe/registry-v1` or `~/.cache/bunlock-dedupe/registry-v1`
+- Windows: `%LOCALAPPDATA%\bunlock-dedupe\Cache\registry-v1`
+
+To remove all persistent data created by `bunlock-dedupe`, run:
+
+```bash
+bunx bunlock-dedupe --clear-cache
+```
+
+This removes only the registry cache shown above and does not modify any project files or Bun's own package cache.

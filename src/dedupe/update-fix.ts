@@ -219,6 +219,7 @@ async function assessSuggestedUpdates(
       update.toVersion,
       {
         offline: options?.offline,
+        refresh: options?.refresh,
         cacheDir: options?.cacheDir,
         fetchFn: options?.fetchFn,
         readDirFn: options?.readDirFn,

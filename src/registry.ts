@@ -4,6 +4,8 @@ import { join } from "node:path"
 
 import semver from "semver"
 
+import { defaultRegistryCacheDir, openRegistryCache } from "./registry-cache"
+
 export type PackageMetadata = {
   version: string
   dependencies?: Record<string, string>
@@ -24,6 +26,8 @@ type Packument = {
 }
 
 const REGISTRY_RETRY_DELAYS_MS = [250, 500, 1000] as const
+const REGISTRY_URL = "https://registry.npmjs.org"
+const REGISTRY_ACCEPT = "application/vnd.npm.install-v1+json"
 
 /**
  * Thrown when a registry request fails transiently (network error, 5xx, rate
@@ -64,6 +68,8 @@ export function createPackumentCache(): PackumentCache {
 type RegistryOptions = {
   offline?: boolean
   cacheDir?: string
+  refresh?: boolean
+  registryCacheDir?: string
   fetchFn?: (
     input: string | URL | Request,
     init?: RequestInit,
@@ -71,6 +77,7 @@ type RegistryOptions = {
   readDirFn?: (path: string) => string[]
   readFileFn?: (path: string) => string
   retryDelayFn?: (delayMs: number) => Promise<void>
+  nowFn?: () => number
   cache?: PackumentCache
 }
 
@@ -94,6 +101,14 @@ function encodePackageNameForRegistryPath(packageName: string): string {
 
 function defaultCacheDir(): string {
   return join(homedir(), ".bun", "install", "cache")
+}
+
+function isPackument(value: unknown): value is Packument {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const { versions } = value as Partial<Packument>
+  return Boolean(
+    versions && typeof versions === "object" && !Array.isArray(versions),
+  )
 }
 
 function parseCacheVersionDir(dirName: string): string | null {
@@ -178,9 +193,9 @@ function readCacheEntries(
 /**
  * Fetch the abbreviated registry packument for `packageName`, with caching.
  *
- * Online: a single GET to `/packageName` with the abbreviated install-v1 Accept
- * returns every version plus per-version metadata in one response. Offline:
- * the packument is reconstructed from the local Bun cache.
+ * Online: fresh data is reused from the persistent system cache. Stale data is
+ * conditionally revalidated with the registry before use. Offline: the
+ * packument is reconstructed from the local Bun cache.
  *
  * The in-flight promise is stored in `options.cache` immediately so concurrent
  * callers (e.g. several `Promise.all` branches that resolve to the same
@@ -222,10 +237,43 @@ async function fetchPackument(
 
     const fetchImpl = options.fetchFn ?? fetch
     const retryDelayFn = options.retryDelayFn ?? wait
+    const nowFn = options.nowFn ?? Date.now
     const encodedName = encodePackageNameForRegistryPath(packageName)
+    // Custom fetch implementations are test hooks and do not implicitly touch
+    // the user's system cache. Tests that exercise persistence opt in with an
+    // explicit registryCacheDir.
+    const registryCacheDir =
+      options.registryCacheDir ??
+      (options.fetchFn ? undefined : defaultRegistryCacheDir())
+    const diskCache = registryCacheDir
+      ? await openRegistryCache({
+          cacheDir: registryCacheDir,
+          registryUrl: REGISTRY_URL,
+          accept: REGISTRY_ACCEPT,
+          packageName,
+          now: nowFn,
+          validate: isPackument,
+        })
+      : undefined
+
+    if (diskCache?.entry && !options.refresh && diskCache.fresh) {
+      return diskCache.entry.data
+    }
+
+    const headers = new Headers({ Accept: REGISTRY_ACCEPT })
+    diskCache?.addConditionalHeaders(headers)
+
+    const persistResponse = (
+      packument: Packument | null,
+      response: Response,
+    ): Promise<Packument | null> =>
+      diskCache
+        ? diskCache.store(packument, response)
+        : Promise.resolve(packument)
+
     const fetchOnce = (): Promise<Packument | null> =>
-      fetchImpl(`https://registry.npmjs.org/${encodedName}`, {
-        headers: { Accept: "application/vnd.npm.install-v1+json" },
+      fetchImpl(`${REGISTRY_URL}/${encodedName}`, {
+        headers,
       })
         .catch((error: unknown) => {
           throw new RegistryError(packageName, "network request failed", {
@@ -233,9 +281,15 @@ async function fetchPackument(
           })
         })
         .then((response) => {
+          if (response.status === 304 && diskCache?.entry?.data) {
+            return diskCache.revalidate(response)
+          }
+
           // A genuine 404 confirms the package does not exist — a cacheable
           // `null`, not a transient failure.
-          if (response.status === 404) return null
+          if (response.status === 404) {
+            return persistResponse(null, response)
+          }
           if (!response.ok) {
             throw new RegistryError(
               packageName,
@@ -243,13 +297,24 @@ async function fetchPackument(
             )
           }
 
-          return response.json().catch((error: unknown) => {
-            throw new RegistryError(
-              packageName,
-              "malformed registry response",
-              { cause: error },
-            )
-          })
+          return response
+            .json()
+            .catch((error: unknown) => {
+              throw new RegistryError(
+                packageName,
+                "malformed registry response",
+                { cause: error },
+              )
+            })
+            .then((packument) => {
+              if (!isPackument(packument)) {
+                throw new RegistryError(
+                  packageName,
+                  "malformed registry response",
+                )
+              }
+              return persistResponse(packument, response)
+            })
         })
 
     const fetchWithRetries = (attempt = 0): Promise<Packument | null> =>

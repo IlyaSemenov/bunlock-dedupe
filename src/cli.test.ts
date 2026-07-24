@@ -23,4 +23,29 @@ describe("CLI flags", () => {
     expect(exitCode).not.toBe(0)
     expect(stderr).toContain("--offline cannot be used with --fix")
   })
+
+  test("--refresh without --update exits with error", async () => {
+    const proc = Bun.spawn(["bun", "src/cli.ts", "--refresh"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const stderr = await new Response(proc.stderr).text()
+    const exitCode = await proc.exited
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain("--refresh is only valid with --update")
+  })
+
+  test("--refresh cannot be combined with --offline", async () => {
+    const proc = Bun.spawn(
+      ["bun", "src/cli.ts", "--update", "--refresh", "--offline"],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    )
+    const stderr = await new Response(proc.stderr).text()
+    const exitCode = await proc.exited
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain("--refresh cannot be used with --offline")
+  })
 })

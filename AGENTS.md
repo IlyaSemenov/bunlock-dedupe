@@ -17,7 +17,7 @@ Treat README.md as the user-facing behavior contract.
 - `src/dedupe/update-analyze.ts` — registry-backed update suggestions.
 - `src/dedupe/update-fix.ts` — safety classification and application of updates for `--update --fix`.
 - `src/dedupe/format.ts`, `src/cli-messages.ts` — detailed report and summary rendering.
-- `src/registry.ts` — registry and local Bun-cache metadata access.
+- `src/registry.ts`, `src/registry-cache.ts` — registry, persistent HTTP cache, and local Bun-cache metadata access.
 
 ## Lockfile invariants
 

@@ -20,11 +20,15 @@ import {
 import { createProgressRenderer } from "./progress"
 import { readBunLock } from "./read-bun-lock"
 import { createPackumentCache, RegistryError } from "./registry"
+import { clearRegistryCache } from "./registry-cache"
 
 const commandName = "bunlock-dedupe"
 
 function printUsage(): void {
-  console.log(`${commandName} [path] [--all] [--fix] [--update [--offline]]`)
+  console.log(
+    `${commandName} [path] [--all] [--fix] [--update [--offline|--refresh]]`,
+  )
+  console.log(`${commandName} --clear-cache`)
   console.log("")
   console.log("Analyze duplicate bun.lock sub-dependencies.")
   console.log("Use --all to also show packages that cannot be deduped.")
@@ -33,6 +37,8 @@ function printUsage(): void {
     "Use --update to find intermediate dep updates that unlock deduplication.",
   )
   console.log("Use --update --offline to analyze only the local bun cache.")
+  console.log("Use --update --refresh to revalidate cached registry data.")
+  console.log("Use --clear-cache to remove all persistent registry data.")
 }
 
 function fail(message: string): never {
@@ -48,6 +54,8 @@ async function run(): Promise<void> {
     help: boolean
     update: boolean
     offline: boolean
+    refresh: boolean
+    clearCache: boolean
   }
   let positionals: string[]
 
@@ -79,9 +87,18 @@ async function run(): Promise<void> {
           type: "boolean",
           default: false,
         },
+        refresh: {
+          type: "boolean",
+          default: false,
+        },
+        "clear-cache": {
+          type: "boolean",
+          default: false,
+        },
       },
     })
-    values = parsed.values
+    const { "clear-cache": clearCache, ...parsedValues } = parsed.values
+    values = { ...parsedValues, clearCache }
     positionals = parsed.positionals
   } catch (error) {
     const message = error instanceof Error ? error.message : "invalid arguments"
@@ -97,8 +114,32 @@ async function run(): Promise<void> {
     fail("expected at most one positional path argument")
   }
 
+  if (values.clearCache) {
+    if (
+      positionals.length > 0 ||
+      values.all ||
+      values.fix ||
+      values.update ||
+      values.offline ||
+      values.refresh
+    ) {
+      fail("--clear-cache cannot be combined with other modes or a path")
+    }
+    const cacheDir = await clearRegistryCache()
+    console.log(`Cleared registry cache at ${cacheDir}.`)
+    return
+  }
+
   if (values.offline && !values.update) {
     fail("--offline is only valid with --update")
+  }
+
+  if (values.refresh && !values.update) {
+    fail("--refresh is only valid with --update")
+  }
+
+  if (values.refresh && values.offline) {
+    fail("--refresh cannot be used with --offline")
   }
 
   if (values.offline && values.fix) {
@@ -118,6 +159,7 @@ async function run(): Promise<void> {
     const { duplicates, suggestedUpdates } =
       await analyzeDuplicatePackagesWithUpdates(parsedLock, {
         offline: values.offline,
+        refresh: values.refresh,
         cache,
         onProgress: progress.update,
       })
@@ -125,6 +167,7 @@ async function run(): Promise<void> {
     if (values.fix) {
       const result = await updateAndDedupeLockText(lockText, {
         offline: values.offline,
+        refresh: values.refresh,
         cache,
         suggestedUpdates,
       })
@@ -147,6 +190,7 @@ async function run(): Promise<void> {
       suggestedUpdates,
       {
         offline: values.offline,
+        refresh: values.refresh,
         cache,
       },
     )

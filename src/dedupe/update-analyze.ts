@@ -66,6 +66,8 @@ export type UpdateAnalysisResult = {
 /** Test hooks allow registry and Bun cache access to be mocked deterministically. */
 export type UpdateAnalysisOptions = {
   offline?: boolean
+  /** Revalidate persistent registry cache entries even when still fresh. */
+  refresh?: boolean
   cacheDir?: string
   fetchFn?: (
     input: string | URL | Request,
@@ -408,6 +410,7 @@ async function findBestCandidate(
   const candidates = await fetchCompatibleVersions(info.packageName, {
     ranges,
     offline: options?.offline,
+    refresh: options?.refresh,
     cacheDir: options?.cacheDir,
     fetchFn: options?.fetchFn,
     readDirFn: options?.readDirFn,
@@ -425,6 +428,7 @@ async function findBestCandidate(
   for (const candidate of newerCandidates) {
     const meta = await fetchPackageMetadata(info.packageName, candidate, {
       offline: options?.offline,
+      refresh: options?.refresh,
       cacheDir: options?.cacheDir,
       fetchFn: options?.fetchFn,
       readDirFn: options?.readDirFn,
