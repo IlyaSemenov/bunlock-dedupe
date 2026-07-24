@@ -46,7 +46,8 @@ Treat README.md as the user-facing behavior contract.
 
 ## Changesets and README
 
-- Every user-visible change gets a `.changeset/*.md` entry: one or two sentences describing the visible behavior change from the CLI user's perspective, without implementation details or rationale.
+- Add a `.changeset/*.md` entry only for user-visible changes; do not add one for internal refactors, maintenance, or tests.
+- Write one or two sentences as release notes for CLI users, describing the changed behavior or what users can now observe or do, without implementation details or rationale.
 - Never edit `CHANGELOG.md` by hand; it is generated from changesets.
 - README documents only what a CLI user needs: flags, workflow, and how to read the report.
 - Keep README additions brief and leave internal mechanics to code comments or this file.
