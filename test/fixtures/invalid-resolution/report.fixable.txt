@@ -1,0 +1,4 @@
+No fixable duplicate packages found in bun.lock.
+
+1 duplicate package in bun.lock.
+1 package cannot be deduped.

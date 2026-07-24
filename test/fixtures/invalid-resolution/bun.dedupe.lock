@@ -1,0 +1,25 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "dependencies": {
+        "app-blocked": "1.0.0",
+        "app-invalid": "1.0.0",
+        "demo-lib": "^3.17.0",
+      },
+    },
+  },
+  "packages": {
+    "app-blocked": ["app-blocked@1.0.0", "", { "dependencies": { "demo-lib": "~3.16.0" } }, "sha"],
+
+    "app-blocked/demo-lib": ["demo-lib@3.16.1", "", {}, "sha"],
+
+    "app-invalid": ["app-invalid@1.0.0", "", { "dependencies": { "demo-lib": "^3.17.0" } }, "sha"],
+
+    "app-invalid/demo-lib": ["demo-lib@3.16.1", "", {}, "sha"],
+
+    "demo-lib": ["demo-lib@3.17.4", "", {}, "sha"],
+  },
+}

@@ -483,6 +483,17 @@ export function formatDuplicatesReport(
     for (const versionInfo of duplicate.versions) {
       lines.push(`  ${formatVersionLine(versionInfo)}`)
 
+      const usedBy = versionInfo.requests.filter(
+        (request) =>
+          evaluateRangeCompatibility(request.range, versionInfo.version) !==
+          false,
+      )
+      const invalidFor = versionInfo.requests.filter(
+        (request) =>
+          evaluateRangeCompatibility(request.range, versionInfo.version) ===
+          false,
+      )
+
       if (
         versionInfo.status === "cannot-dedupe" &&
         versionInfo.displayStatus !== "manual-update"
@@ -490,7 +501,7 @@ export function formatDuplicatesReport(
         const blockedBy: typeof versionInfo.requests = []
         const alsoUsedBy: typeof versionInfo.requests = []
 
-        for (const request of versionInfo.requests) {
+        for (const request of usedBy) {
           const targetCompatible = evaluateRangeCompatibility(
             request.range,
             duplicate.targetVersion,
@@ -505,8 +516,9 @@ export function formatDuplicatesReport(
         pushSection(lines, "blocked by", blockedBy.map(formatRequest))
         pushSection(lines, "also used by", alsoUsedBy.map(formatRequest))
       } else {
-        pushSection(lines, "used by", versionInfo.requests.map(formatRequest))
+        pushSection(lines, "used by", usedBy.map(formatRequest))
       }
+      pushSection(lines, "invalid for", invalidFor.map(formatRequest))
       pushSection(
         lines,
         "removed after",

@@ -10,7 +10,7 @@ undici-types:
   ✅ 7.16.0
     used by:
       - example > @types/node: ~7.16.0
-  🗑️ 5.28.5
+  🗑️ 5.26.5
     used by:
       - example > bun-types > @types/node: ~5.26.0
     removed after:

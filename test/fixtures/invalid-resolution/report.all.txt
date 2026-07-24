@@ -1,0 +1,12 @@
+demo-lib:
+  ✅ 3.17.4
+    used by:
+      - example: ^3.17.0
+  ❌ 3.16.1
+    blocked by:
+      - example > app-blocked: ~3.16.0
+    invalid for:
+      - example > app-invalid: ^3.17.0
+
+1 duplicate package in bun.lock.
+1 package cannot be deduped.
