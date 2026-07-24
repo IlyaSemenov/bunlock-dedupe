@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.6.5
+
+### Patch Changes
+
+- fbc14cc: Retry transient npm registry failures 3 times before aborting an update scan.
+
 ## 1.6.4
 
 ### Patch Changes
