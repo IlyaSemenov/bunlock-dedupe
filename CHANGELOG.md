@@ -1,5 +1,12 @@
 # bunlock-dedupe
 
+## 1.7.2
+
+### Patch Changes
+
+- 8a8c4e1: Prevent stable dependency ranges from selecting or deduplicating to prerelease package versions unless the range explicitly opts in.
+  Existing prerelease resolutions that do not satisfy their range are now reported as invalid.
+
 ## 1.7.1
 
 ### Patch Changes
