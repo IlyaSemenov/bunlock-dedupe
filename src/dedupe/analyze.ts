@@ -35,6 +35,8 @@ export type DependencyRequest = {
   dependencyName: string
   /** Declared dependency range exactly as it appears in package metadata. */
   range: string
+  /** Global effective range from bun.lock, when present. */
+  overrideRange?: string
   /** Lock key selected by the lockfile resolver for this request. */
   resolvedLockKey: string
   resolvedVersion: string
@@ -100,6 +102,7 @@ type OrphanDetectionContext = {
   rewrites: RewriteByPackage
   templates: TemplatesByPackageAndVersion
   packagesByLockKey: Map<string, ResolvedPackage>
+  lock: BunLockFile
 }
 
 /**
@@ -243,6 +246,63 @@ export function evaluateRangeCompatibility(
   return semver.satisfies(targetVersion, validRange)
 }
 
+/**
+ * Read the exact bare-name override Bun stores for a dependency.
+ *
+ * Bun 1.3.14 ignores selector keys and omits unsupported nested/path forms,
+ * so matching those here would diverge from the package manager.
+ */
+export function dependencyOverrideRange(
+  lock: Pick<BunLockFile, "overrides">,
+  dependencyName: string,
+): string | undefined {
+  const overrides = lock.overrides
+  if (!overrides) return undefined
+  if (!Object.hasOwn(overrides, dependencyName)) return undefined
+  return overrides[dependencyName]
+}
+
+/**
+ * Return the range Bun actually enforces for a dependency request.
+ *
+ * An override remains authoritative even when it is not valid semver;
+ * compatibility then stays unknown instead of falling back to the declaration.
+ */
+export function effectiveDependencyRange(
+  lock: Pick<BunLockFile, "overrides">,
+  dependencyName: string,
+  declaredRange: string,
+): string {
+  const overrideRange = dependencyOverrideRange(lock, dependencyName)
+  return overrideRange === undefined ? declaredRange : overrideRange
+}
+
+/** Return the declared range unless bun.lock provides an override. */
+export function effectiveRequestRange(request: {
+  range: string
+  overrideRange?: string
+}): string {
+  return request.overrideRange === undefined
+    ? request.range
+    : request.overrideRange
+}
+
+/**
+ * Evaluate a resolved request against its effective range.
+ *
+ * `range` remains the package's declaration for reporting, while
+ * `overrideRange` controls every compatibility and safety decision.
+ */
+export function evaluateRequestCompatibility(
+  request: Pick<DependencyRequest, "range" | "overrideRange">,
+  targetVersion: string,
+): boolean | undefined {
+  return evaluateRangeCompatibility(
+    effectiveRequestRange(request),
+    targetVersion,
+  )
+}
+
 function workspaceNodeId(workspacePath: string): string {
   return `workspace:${workspacePath || "."}`
 }
@@ -364,11 +424,14 @@ function collectDependencyGraph(
       return
     }
 
+    // Keep the declaration for reports and carry Bun's effective constraint
+    // separately so an override cannot be mistaken for requester metadata.
     requests.push({
       requesterNodeId,
       requesterLabel: nodeLabels.get(requesterNodeId) ?? requesterNodeId,
       dependencyName,
       range,
+      overrideRange: dependencyOverrideRange(lock, dependencyName),
       resolvedLockKey: resolvedNodeId,
       resolvedVersion: resolvedPackage.version,
       requestPath: [],
@@ -393,7 +456,9 @@ function collectDependencyGraph(
     }
 
     for (const [dependencyName, range] of Object.entries(workspaceDeps)) {
+      const overrideRange = dependencyOverrideRange(lock, dependencyName)
       const workspaceTargetNodeId =
+        overrideRange === undefined &&
         range.startsWith("workspace:") &&
         workspaceNameToNodeId.has(dependencyName)
           ? workspaceNameToNodeId.get(dependencyName)
@@ -651,7 +716,7 @@ function requestWillBeRemovedByRequesterRewrite(
   }
 
   const compatibility = evaluateRangeCompatibility(
-    targetRange,
+    effectiveDependencyRange(context.lock, request.dependencyName, targetRange),
     requestedVersion,
   )
   return compatibility === false
@@ -735,15 +800,16 @@ export function analyzeDuplicatePackages(
         return "unknown"
       }
 
-      const compatibilityChecks = requests
-        .map((request) => evaluateRangeCompatibility(request.range, toVersion))
-        .filter((value): value is boolean => value !== undefined)
+      const compatibilityChecks = requests.map((request) =>
+        evaluateRequestCompatibility(request, toVersion),
+      )
 
-      if (compatibilityChecks.length === 0) {
+      if (compatibilityChecks.some((value) => value === false)) return "cannot"
+      // Every inbound request must be checkable before a version can be
+      // rewritten; one unknown range keeps the whole version unchanged.
+      if (compatibilityChecks.some((value) => value === undefined))
         return "unknown"
-      }
-
-      return compatibilityChecks.every(Boolean) ? "can" : "cannot"
+      return "can"
     }
 
     for (const [versionIndex, version] of versions.entries()) {
@@ -857,6 +923,7 @@ export function analyzeDuplicatePackages(
     rewrites: collectVersionRewrites(duplicates),
     templates: collectTemplateLockKeys(packagesByLockKey),
     packagesByLockKey,
+    lock,
   }
 
   const duplicateStatuses = collectDuplicateStatuses(duplicates)

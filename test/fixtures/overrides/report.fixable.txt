@@ -1,0 +1,14 @@
+vite:
+  ✅ 8.2.0-beta.0
+    used by:
+      - example: ^8.0.0 (overridden to ^8.1.0 || ^8.2.0-beta.0)
+      - example > old-parent: ^8.0.0 (overridden to ^8.1.0 || ^8.2.0-beta.0)
+  ⬆️ 8.1.5 → 8.2.0-beta.0
+    used by:
+      - example > stable-parent: ^8.0.0 (overridden to ^8.1.0 || ^8.2.0-beta.0)
+
+2 duplicate packages in bun.lock.
+1 package can be deduped.
+1 package cannot be deduped.
+
+Run with --fix to apply available dedupes.

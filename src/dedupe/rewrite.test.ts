@@ -1,8 +1,91 @@
 import { describe, expect, test } from "bun:test"
 
-import { analyzeDuplicatePackages } from "./analyze"
-import { parseBunLock } from "./parse"
+import {
+  analyzeDuplicatePackages,
+  evaluateRequestCompatibility,
+} from "./analyze"
+import { type BunLockFile, parseBunLock } from "./parse"
 import { dedupeLockText } from "./rewrite"
+
+test("an unsupported override specifier does not fall back", () => {
+  expect(
+    evaluateRequestCompatibility(
+      { range: "^8.0.0", overrideRange: "latest" },
+      "8.1.0",
+    ),
+  ).toBeUndefined()
+})
+
+test("rejects structurally invalid overrides", () => {
+  expect(() => parseBunLock(`{ "overrides": null }`)).toThrow(
+    "bun.lock overrides must be an object",
+  )
+  expect(() => parseBunLock(`{ "overrides": { "vite": {} } }`)).toThrow(
+    'bun.lock override for "vite" must be a string',
+  )
+})
+
+test("one unknown request keeps a shared version unchanged", () => {
+  const lock = {
+    workspaces: {
+      "": {
+        name: "root",
+        dependencies: {
+          known: "1.0.0",
+          target: "1.0.0",
+          shared: "latest",
+        },
+      },
+    },
+    packages: {
+      known: ["known@1.0.0", "", { dependencies: { shared: ">=1.0.0" } }],
+      target: ["target@1.0.0", "", { dependencies: { shared: "^2.0.0" } }],
+      shared: ["shared@1.5.0"],
+      "target/shared": ["shared@2.1.0"],
+    },
+  } satisfies BunLockFile
+
+  const shared = analyzeDuplicatePackages(lock).find(
+    (duplicate) => duplicate.name === "shared",
+  )
+
+  expect(
+    shared?.versions.find((version) => version.version === "1.5.0")?.status,
+  ).toBe("unknown")
+})
+
+test("a workspace request resolves through its registry override", () => {
+  const lock = {
+    workspaces: {
+      "": { name: "root" },
+      "packages/app": {
+        name: "app",
+        dependencies: { semver: "workspace:*" },
+      },
+      "packages/semver": { name: "semver" },
+    },
+    overrides: { semver: "7.5.4" },
+    packages: {
+      app: ["app@workspace:packages/app"],
+      semver: ["semver@workspace:packages/semver"],
+      "app/semver": ["semver@7.5.4"],
+    },
+  } satisfies BunLockFile
+
+  const semver = analyzeDuplicatePackages(lock).find(
+    (duplicate) => duplicate.name === "semver",
+  )
+  const request = semver?.versions
+    .find((version) => version.version === "7.5.4")
+    ?.requests.at(0)
+
+  expect(request).toMatchObject({
+    requesterNodeId: "workspace:packages/app",
+    resolvedLockKey: "app/semver",
+    range: "workspace:*",
+    overrideRange: "7.5.4",
+  })
+})
 
 describe("dedupeLockText", () => {
   test("keeps deduping until no newly unlocked fixes remain", () => {

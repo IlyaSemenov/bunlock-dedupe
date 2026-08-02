@@ -121,6 +121,22 @@ describe("formatReportSummary", () => {
     )
   })
 
+  test("unknown only", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 1,
+      readyPackages: 0,
+      intermediatePackages: 0,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
+      cannotDedupePackages: 0,
+      unknownPackages: 1,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "1 duplicate package in /project/bun.lock.\n" +
+        "Compatibility could not be checked automatically for 1 package.",
+    )
+  })
+
   test("intermediate only", () => {
     const summary: ReportSummary = {
       totalDuplicatePackages: 2,

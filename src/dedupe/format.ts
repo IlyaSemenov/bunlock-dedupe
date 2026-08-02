@@ -1,5 +1,5 @@
 import type { DuplicatePackageInfo, DuplicateVersionInfo } from "./analyze"
-import { evaluateRangeCompatibility } from "./analyze"
+import { evaluateRequestCompatibility } from "./analyze"
 import {
   isSuggestedTarget,
   resolveSuggestedUnlock,
@@ -15,6 +15,8 @@ const SKIP_REASON_TEXT: Record<UpdateSkipReason, string> = {
   "metadata-unavailable": "registry metadata unavailable",
   "no-integrity": "no integrity hash available",
   "new-dependencies": "update adds dependencies missing from the lockfile",
+  "unsupported-range":
+    "update uses an effective dependency range that cannot be checked automatically",
   "dependency-conflict":
     "update needs a dependency version this package cannot reach in the lockfile",
 }
@@ -102,7 +104,7 @@ function rewriteCannotDedupeAsOrphan(
       const removable = v.requests.every(
         (r) =>
           unlock.requesterLockKeys.has(r.requesterNodeId) ||
-          evaluateRangeCompatibility(r.range, unlock.targetVersion) === true,
+          evaluateRequestCompatibility(r, unlock.targetVersion) === true,
       )
       if (!removable) return v
 
@@ -213,7 +215,7 @@ function formatConstraint(
     constraint.requesterPath.length > 0
       ? constraint.requesterPath.join(" > ")
       : constraint.requesterLabel
-  return `${requesterText}: ${constraint.range}`
+  return `${requesterText}: ${formatEffectiveRange(constraint)}`
 }
 
 function buildSkippedUpdateReasonsByRequester(
@@ -310,7 +312,16 @@ function renderPath(request: DuplicateVersionInfo["requests"][number]): string {
 function formatRequest(
   request: DuplicateVersionInfo["requests"][number],
 ): string {
-  return `${renderPath(request)}: ${request.range}`
+  return `${renderPath(request)}: ${formatEffectiveRange(request)}`
+}
+
+function formatEffectiveRange(request: {
+  range: string
+  overrideRange?: string
+}): string {
+  return request.overrideRange === undefined
+    ? request.range
+    : `${request.range} (overridden to ${request.overrideRange})`
 }
 
 function pushSection(
@@ -503,13 +514,11 @@ export function formatDuplicatesReport(
 
       const usedBy = versionInfo.requests.filter(
         (request) =>
-          evaluateRangeCompatibility(request.range, versionInfo.version) !==
-          false,
+          evaluateRequestCompatibility(request, versionInfo.version) !== false,
       )
       const invalidFor = versionInfo.requests.filter(
         (request) =>
-          evaluateRangeCompatibility(request.range, versionInfo.version) ===
-          false,
+          evaluateRequestCompatibility(request, versionInfo.version) === false,
       )
 
       if (
@@ -520,8 +529,8 @@ export function formatDuplicatesReport(
         const alsoUsedBy: typeof versionInfo.requests = []
 
         for (const request of usedBy) {
-          const targetCompatible = evaluateRangeCompatibility(
-            request.range,
+          const targetCompatible = evaluateRequestCompatibility(
+            request,
             duplicate.targetVersion,
           )
           if (targetCompatible === false) {

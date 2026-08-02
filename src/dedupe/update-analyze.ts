@@ -9,7 +9,11 @@ import {
 import type { DuplicatePackageInfo } from "./analyze"
 import {
   analyzeDuplicatePackages,
+  dependencyOverrideRange,
+  effectiveDependencyRange,
+  effectiveRequestRange,
   evaluateRangeCompatibility,
+  evaluateRequestCompatibility,
   resolveDependencyLockKey,
 } from "./analyze"
 import type { BunLockFile } from "./parse"
@@ -40,7 +44,10 @@ type InboundRangeConstraint = {
   /** Report label for the parent constraint, e.g. `myapp (workspace)` or `vite`. */
   requesterLabel: string
   requesterPath: string[]
+  /** Range declared by the parent package or workspace. */
   range: string
+  /** Global effective range from bun.lock, when present. */
+  overrideRange?: string
 }
 
 /**
@@ -206,6 +213,7 @@ function collectBlockedDuplicates(
  * version.
  * @param blockedDuplicateNames Duplicate package names requested too narrowly
  * by the current requester.
+ * @param lock Lockfile whose global overrides also apply to candidate metadata.
  */
 function candidateDedupeTargets(
   candidateMeta: {
@@ -216,6 +224,7 @@ function candidateDedupeTargets(
   requesterLockKey: string,
   blockedDuplicateNames: string[],
   duplicates: DuplicatePackageInfo[],
+  lock: BunLockFile,
 ): CandidateVersionUnlock[] | null {
   const candidateDeps = {
     ...candidateMeta.dependencies,
@@ -228,7 +237,13 @@ function candidateDedupeTargets(
     const dupGroup = duplicates.find((d) => d.name === dupName)
     if (!dupGroup) return null
 
-    const candidateRange = candidateDeps[dupName]
+    const declaredCandidateRange = candidateDeps[dupName]
+    // Updating a requester does not bypass Bun's global override: the new
+    // metadata must be evaluated against the same effective constraint.
+    const candidateRange =
+      declaredCandidateRange === undefined
+        ? undefined
+        : effectiveDependencyRange(lock, dupName, declaredCandidateRange)
     const fromVersionInfo = dupGroup.versions.find((version) =>
       version.requests.some(
         (request) => request.requesterNodeId === requesterLockKey,
@@ -293,12 +308,18 @@ function addInboundRange(
   requesterLabel: string,
   requesterPath: string[],
   range: string,
+  overrideRange?: string,
 ): void {
   const arr = inboundByLockKey.get(lockKey) ?? []
   if (
-    !arr.some((r) => r.range === range && r.requesterLabel === requesterLabel)
+    !arr.some(
+      (r) =>
+        r.range === range &&
+        r.overrideRange === overrideRange &&
+        r.requesterLabel === requesterLabel,
+    )
   ) {
-    arr.push({ requesterLabel, requesterPath, range })
+    arr.push({ requesterLabel, requesterPath, range, overrideRange })
     inboundByLockKey.set(lockKey, arr)
   }
 }
@@ -390,7 +411,8 @@ function collectInboundRanges(
     for (const versionInfo of duplicate.versions) {
       for (const request of versionInfo.requests) {
         if (!requesterMap.has(request.resolvedLockKey)) continue
-        if (isNonSemverRange(request.range)) continue
+        const effectiveRange = effectiveRequestRange(request)
+        if (isNonSemverRange(effectiveRange)) continue
 
         addInboundRange(
           inboundByLockKey,
@@ -398,6 +420,7 @@ function collectInboundRanges(
           request.requesterLabel,
           request.requestPath,
           request.range,
+          request.overrideRange,
         )
       }
     }
@@ -412,7 +435,9 @@ function collectInboundRanges(
       ...normalizeDependencyMap(meta.peerDependencies),
     }
     for (const [depName, range] of Object.entries(allDeps)) {
-      if (typeof range !== "string" || isNonSemverRange(range)) continue
+      const overrideRange = dependencyOverrideRange(lock, depName)
+      const effectiveRange = effectiveDependencyRange(lock, depName, range)
+      if (isNonSemverRange(effectiveRange)) continue
 
       const resolvedLockKey = resolveDependencyLockKey(
         entryLockKey,
@@ -427,6 +452,7 @@ function collectInboundRanges(
         entryLockKey,
         requesterPaths.get(resolvedLockKey) ?? [entryLockKey],
         range,
+        overrideRange,
       )
     }
   }
@@ -447,7 +473,9 @@ function collectInboundRanges(
       ...normalizeDependencyMap(workspace.peerDependencies),
     }
     for (const [depName, range] of Object.entries(allDeps)) {
-      if (!range || isNonSemverRange(range)) continue
+      const overrideRange = dependencyOverrideRange(lock, depName)
+      const effectiveRange = effectiveDependencyRange(lock, depName, range)
+      if (!range || isNonSemverRange(effectiveRange)) continue
 
       const resolvedLockKey =
         resolveDependencyLockKey(workspaceName, depName, namesByLockKey) ??
@@ -460,6 +488,7 @@ function collectInboundRanges(
         workspaceLabel,
         requesterPaths.get(resolvedLockKey) ?? [workspaceLabel],
         range,
+        overrideRange,
       )
     }
   }
@@ -497,9 +526,14 @@ function pruneUnsuggestible(
 async function findBestCandidate(
   info: RequesterInfo,
   duplicates: DuplicatePackageInfo[],
+  lock: BunLockFile,
   options?: UpdateAnalysisOptions,
 ): Promise<CandidateUpdate | null> {
-  const ranges = info.inboundRanges.map((r) => r.range)
+  // Registry candidate selection must use Bun's effective inbound ranges;
+  // constrainedBy keeps the declarations for the user-facing report.
+  const ranges = info.inboundRanges.map((constraint) =>
+    effectiveRequestRange(constraint),
+  )
 
   const candidates = await fetchCompatibleVersions(info.packageName, {
     ranges,
@@ -536,6 +570,7 @@ async function findBestCandidate(
       info.lockKey,
       info.blockedDuplicateNames,
       duplicates,
+      lock,
     )
     if (unlocked) {
       return {
@@ -594,7 +629,7 @@ function pruneIncompleteUnlocks(
         .find((candidateVersion) =>
           versionInfo.requests.every(
             (request) =>
-              evaluateRangeCompatibility(request.range, candidateVersion) ===
+              evaluateRequestCompatibility(request, candidateVersion) ===
                 true ||
               compatibleTargetsByRequester
                 .get(
@@ -659,7 +694,7 @@ export async function analyzeDuplicatePackagesWithUpdates(
   let completed = 0
   const results = await Promise.all(
     requesterList.map(async (info) => {
-      const result = await findBestCandidate(info, duplicates, options)
+      const result = await findBestCandidate(info, duplicates, lock, options)
       completed += 1
       options?.onProgress?.({
         phase: "analyze",

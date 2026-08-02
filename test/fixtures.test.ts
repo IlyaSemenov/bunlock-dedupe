@@ -8,6 +8,7 @@ import {
   classifyUpdateSafety,
   dedupeLockText,
   parseBunLock,
+  updateAndDedupeLockText,
 } from "../src/dedupe"
 import { analyzeDuplicatePackagesWithUpdates } from "../src/dedupe/update-analyze"
 import type { PackageMetadata } from "../src/registry"
@@ -77,6 +78,7 @@ for (const { name, dir, files } of allFixtures) {
     files.includes("bun.dedupe.lock")
   const hasUpdate =
     files.includes("registry.json") && files.includes("report.update.txt")
+  const hasUpdateFix = hasUpdate && files.includes("bun.update.lock")
 
   test(`fixture: ${name}`, async () => {
     const lockText = readFileSync(path.join(dir, "bun.lock"), "utf8")
@@ -135,6 +137,16 @@ for (const { name, dir, files } of allFixtures) {
         "utf8",
       ).trimEnd()
       expect(fullOutput).toBe(expected)
+
+      if (hasUpdateFix) {
+        const updateResult = await updateAndDedupeLockText(lockText, {
+          fetchFn,
+          suggestedUpdates,
+        })
+        expect(updateResult.lockText).toBe(
+          readFileSync(path.join(dir, "bun.update.lock"), "utf8"),
+        )
+      }
     }
   })
 }

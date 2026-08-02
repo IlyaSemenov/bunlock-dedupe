@@ -1,0 +1,20 @@
+shared-dep:
+  ✅ 2.1.0
+    used by:
+      - example: ^2.0.0
+  ❌ 1.5.0
+    blocked by:
+      - example > old-parent: ^1.0.0
+
+tagged-dep:
+  ✅ 1.0.0
+    used by:
+      - example: 1.0.0 (overridden to latest)
+      - example > old-parent: ^1.0.0 (overridden to latest)
+  ❓ 0.9.0
+    used by:
+      - example > stable-parent: ^0.9.0 (overridden to latest)
+
+2 duplicate packages in bun.lock.
+1 package cannot be deduped.
+Compatibility could not be checked automatically for 1 package.

@@ -1,7 +1,7 @@
 import type { DuplicatePackageInfo } from "./dedupe/analyze"
 import {
   analyzeDuplicatePackages,
-  evaluateRangeCompatibility,
+  evaluateRequestCompatibility,
 } from "./dedupe/analyze"
 import { formatDuplicatesReport, updateIdentity } from "./dedupe/format"
 import { parseBunLock } from "./dedupe/parse"
@@ -61,6 +61,7 @@ export type ReportSummary = {
   manualUpdatePackages: number
   manualUpdateDedupePackages: number
   cannotDedupePackages: number
+  unknownPackages?: number
 }
 
 export function buildReportSummary(
@@ -82,9 +83,18 @@ export function buildReportSummary(
   const manualUpdateDedupePackages = new Set(
     (skippedUpdates ?? []).flatMap((u) => u.deduplicates.map((d) => d.name)),
   ).size
+  const unknownPackages = duplicateGroups.filter((group) => {
+    const statuses = new Set(group.versions.map((version) => version.status))
+    return (
+      statuses.has("unknown") &&
+      !statuses.has("can-dedupe") &&
+      !statuses.has("orphan") &&
+      !statuses.has("cannot-dedupe")
+    )
+  }).length
   const cannotDedupePackages = suggestedUpdates
     ? countCannotDedupePackages(duplicateGroups, suggestedUpdates)
-    : duplicateGroups.length - readyPackages
+    : duplicateGroups.length - readyPackages - unknownPackages
 
   return {
     totalDuplicatePackages: duplicateGroups.length,
@@ -93,6 +103,7 @@ export function buildReportSummary(
     manualUpdatePackages,
     manualUpdateDedupePackages,
     cannotDedupePackages,
+    unknownPackages,
   }
 }
 
@@ -130,6 +141,16 @@ export function formatReportSummary(
   if (summary.cannotDedupePackages > 0) {
     lines.push(
       `${plural(summary.cannotDedupePackages, "package", "packages")} cannot be deduped.`,
+    )
+  }
+
+  if ((summary.unknownPackages ?? 0) > 0) {
+    lines.push(
+      `Compatibility could not be checked automatically for ${plural(
+        summary.unknownPackages ?? 0,
+        "package",
+        "packages",
+      )}.`,
     )
   }
 
@@ -185,8 +206,7 @@ export function countCannotDedupePackages(
       return v.requests.every(
         (request) =>
           unlock.requesterLockKeys.has(request.requesterNodeId) ||
-          evaluateRangeCompatibility(request.range, unlock.targetVersion) ===
-            true,
+          evaluateRequestCompatibility(request, unlock.targetVersion) === true,
       )
     })
     return !allCovered

@@ -5,8 +5,8 @@ import {
   fetchPackageMetadata,
   type PackageMetadata,
 } from "../registry"
-import { resolveDependencyLockKey } from "./analyze"
-import type { BunPackageEntry, BunPackageMeta } from "./parse"
+import { effectiveDependencyRange, resolveDependencyLockKey } from "./analyze"
+import type { BunLockFile, BunPackageEntry, BunPackageMeta } from "./parse"
 import {
   isPackageEntry,
   normalizeDependencyMap,
@@ -26,6 +26,7 @@ export type UpdateSkipReason =
   | "metadata-unavailable"
   | "no-integrity"
   | "new-dependencies"
+  | "unsupported-range"
   | "dependency-conflict"
 
 export type SkippedUpdate = SuggestedUpdate & {
@@ -129,15 +130,18 @@ function collectPackageSpecs(
 }
 
 /**
- * Runtime, optional, and non-optional peer dependency ranges that the lockfile
- * must be able to satisfy for this package version.
+ * Effective runtime, optional, and non-optional peer dependency ranges that
+ * the lockfile must be able to satisfy for this package version.
+ *
+ * Non-semver override specifiers stay authoritative, causing the safety pass
+ * to reject the update conservatively instead of using the declared range.
  */
 function requiredDependencyRanges(
   meta: PackageMetadata,
+  lock: Pick<BunLockFile, "overrides">,
 ): Record<string, string> {
   const optionalPeers = collectOptionalPeerNames(meta)
-
-  return {
+  const declaredRanges = {
     ...normalizeDependencyMap(meta.dependencies),
     ...normalizeDependencyMap(meta.optionalDependencies),
     ...Object.fromEntries(
@@ -146,11 +150,19 @@ function requiredDependencyRanges(
       ),
     ),
   }
+
+  // Both the global pre-filter and contextual final validation call this
+  // helper, so they cannot disagree about candidate metadata under overrides.
+  return Object.fromEntries(
+    Object.entries(declaredRanges).map(([name, range]) => [
+      name,
+      effectiveDependencyRange(lock, name, range),
+    ]),
+  )
 }
 
 /**
- * Check whether applying an intermediate package update can be done without
- * adding brand-new lockfile entries.
+ * Return why an intermediate package update cannot reuse current entries.
  *
  * `--update --fix` only rewrites existing tuples; if the new package version
  * needs a dependency version that is not already present, the update is left for
@@ -162,16 +174,18 @@ function requiredDependencyRanges(
  *
  * @param specsByLockKey Package versions already available somewhere in the
  * current lockfile.
+ * @returns A precise hold-back reason, or undefined when the pre-filter passes.
  */
-function canReuseExistingDependencyEntries(
+function dependencyReuseSkipReason(
   meta: PackageMetadata,
   specsByLockKey: Map<string, { name: string; version: string }>,
-): boolean {
+  lock: Pick<BunLockFile, "overrides">,
+): "new-dependencies" | "unsupported-range" | undefined {
   for (const [dependencyName, range] of Object.entries(
-    requiredDependencyRanges(meta),
+    requiredDependencyRanges(meta, lock),
   )) {
     const validRange = semver.validRange(range)
-    if (!validRange) return false
+    if (!validRange) return "unsupported-range"
 
     const hasCompatibleEntry = [...specsByLockKey.values()].some(
       (resolvedSpec) =>
@@ -179,11 +193,11 @@ function canReuseExistingDependencyEntries(
         semver.satisfies(resolvedSpec.version, validRange),
     )
     if (!hasCompatibleEntry) {
-      return false
+      return "new-dependencies"
     }
   }
 
-  return true
+  return undefined
 }
 
 /**
@@ -191,7 +205,7 @@ function canReuseExistingDependencyEntries(
  * that should be reported as manual work.
  */
 async function assessSuggestedUpdates(
-  packages: Record<string, BunPackageEntry>,
+  lock: BunLockFile,
   updates: SuggestedUpdate[],
   options?: UpdateAnalysisOptions,
 ): Promise<{
@@ -200,6 +214,7 @@ async function assessSuggestedUpdates(
 }> {
   const applicableUpdates: ApplicableUpdate[] = []
   const skippedUpdates: SkippedUpdate[] = []
+  const packages = lock.packages ?? {}
   const specsByLockKey = collectPackageSpecs(packages)
 
   // This pass reports no progress: every packument it needs is already cached
@@ -236,8 +251,13 @@ async function assessSuggestedUpdates(
       skippedUpdates.push({ ...update, skipReason: "no-integrity" })
       continue
     }
-    if (!canReuseExistingDependencyEntries(meta, specsByLockKey)) {
-      skippedUpdates.push({ ...update, skipReason: "new-dependencies" })
+    const reuseSkipReason = dependencyReuseSkipReason(
+      meta,
+      specsByLockKey,
+      lock,
+    )
+    if (reuseSkipReason) {
+      skippedUpdates.push({ ...update, skipReason: reuseSkipReason })
       continue
     }
 
@@ -299,7 +319,8 @@ function findContextConflicts(
   lockText: string,
   updates: ApplicableUpdate[],
 ): Set<ApplicableUpdate> {
-  const packages = parseBunLock(lockText).packages ?? {}
+  const lock = parseBunLock(lockText)
+  const packages = lock.packages ?? {}
   const specsByLockKey = collectPackageSpecs(packages)
   const conflicts = new Set<ApplicableUpdate>()
 
@@ -317,7 +338,7 @@ function findContextConflicts(
     }
 
     for (const [dependencyName, range] of Object.entries(
-      requiredDependencyRanges(meta),
+      requiredDependencyRanges(meta, lock),
     )) {
       const resolvedKey = resolveDependencyLockKey(
         update.requesterLockKey,
@@ -367,7 +388,7 @@ async function planAndApplyUpdates(
   options?: UpdateAnalysisOptions,
 ): Promise<UpdatePlan> {
   const assessment = await assessSuggestedUpdates(
-    parseBunLock(lockText).packages ?? {},
+    parseBunLock(lockText),
     updates,
     options,
   )

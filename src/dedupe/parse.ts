@@ -55,6 +55,8 @@ export type BunLockFile = {
   lockfileVersion?: number
   configVersion?: number
   workspaces?: Record<string, BunLockWorkspace>
+  /** Canonical map Bun writes for package.json overrides and resolutions. */
+  overrides?: DependencyMap
   packages?: Record<string, BunPackageEntry>
 }
 
@@ -113,6 +115,20 @@ export function parseBunLock(lockText: string): BunLockFile {
   const parsed = JSON5.parse(lockText)
   if (!isObject(parsed)) {
     throw new Error("bun.lock must parse to an object")
+  }
+
+  const overrides = parsed.overrides
+  if (overrides !== undefined) {
+    if (!isObject(overrides) || Array.isArray(overrides)) {
+      throw new Error("bun.lock overrides must be an object")
+    }
+    for (const [name, value] of Object.entries(overrides)) {
+      if (typeof value !== "string") {
+        throw new Error(
+          `bun.lock override for ${JSON.stringify(name)} must be a string`,
+        )
+      }
+    }
   }
 
   return parsed as BunLockFile

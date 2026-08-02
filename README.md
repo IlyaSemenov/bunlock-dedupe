@@ -98,6 +98,12 @@ Bun sometimes resolves the same package at multiple versions because different p
 
 For example, if package A requires `^3.15.2` and package B requires `^3.17.0`, both ranges are compatible with `3.17.0`. `--fix` upgrades the `^3.15.2` entry to `3.17.0`, removing the duplicate.
 
+## Range handling
+
+- Standard semver rules are used, including prerelease handling.
+- Bun overrides and resolutions recorded in `bun.lock` are respected.
+- Non-semver ranges such as `catalog:`, `workspace:`, `link:`, and `file:` are reported as unknown and left unchanged.
+
 ## Finding updates that unlock deduplication
 
 When an intermediate dependency pins a subdependency to an older version (marked `❌ cannot-dedupe`), `--update` checks the npm registry for newer versions of that intermediate package that could break the deadlock.

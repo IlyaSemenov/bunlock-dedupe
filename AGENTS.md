@@ -22,6 +22,7 @@ Treat README.md as the user-facing behavior contract.
 ## Lockfile invariants
 
 - Never write a lockfile in which a dependency range resolves to an incompatible version; `--update --fix` must validate the simulated final lockfile and skip offending updates.
+- Treat top-level `bun.lock` overrides as the effective dependency ranges while preserving declared ranges for display.
 - Treat prerelease compatibility with default semver range semantics; a prerelease satisfies only comparator sets that explicitly opt into a prerelease with the same major, minor, and patch tuple.
 - Dedupe rewrites operate per package version, not per lock entry: a version is rewritten only when every inbound request accepts the target.
 - For a package requester, normal dependency lookup order is exact `requester/dependency`, closest ancestor-provided nested entry, then root `dependency`.

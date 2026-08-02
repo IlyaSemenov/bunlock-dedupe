@@ -1,0 +1,16 @@
+shared-dep:
+  ✅ 2.1.0
+    used by:
+      - example: ^2.0.0
+  ✋ 1.5.0 → 2.1.0
+    used by:
+      - example > old-parent: ^1.0.0
+    can be removed after manual update:
+      - old-parent: 1.0.0 → 1.1.0
+        required by:
+          - example: ^1.0.0
+        held back: update uses an effective dependency range that cannot be checked automatically
+
+2 duplicate packages in bun.lock.
+1 package can be deduped by manually updating 1 intermediate dependency.
+Compatibility could not be checked automatically for 1 package.
