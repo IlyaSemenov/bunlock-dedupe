@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.8.0
+
+### Minor Changes
+
+- 32b14a2: Honor dependency overrides stored in `bun.lock` during deduplication, update analysis, and safety checks, while showing both declared and overridden ranges in reports.
+
 ## 1.7.2
 
 ### Patch Changes
