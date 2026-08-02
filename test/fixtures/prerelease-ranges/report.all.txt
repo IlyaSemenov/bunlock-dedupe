@@ -1,0 +1,13 @@
+vite:
+  ✅ 8.2.0-beta.0
+    used by:
+      - example > prerelease-parent: ^8.2.0-beta.0
+  ❌ 8.1.5
+    blocked by:
+      - example: ^8.1.0
+  ❌ 7.9.0
+    blocked by:
+      - example > old-parent: ^7.0.0
+
+1 duplicate package in bun.lock.
+1 package cannot be deduped.

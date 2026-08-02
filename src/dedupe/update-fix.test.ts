@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test"
 import type { PackageMetadata } from "../registry"
 import { analyzeDuplicatePackages } from "./analyze"
 import { parseBunLock } from "./parse"
-import { updateAndDedupeLockText } from "./update-fix"
+import { classifyUpdateSafety, updateAndDedupeLockText } from "./update-fix"
 
 type FetchFn = (
   input: string | URL | Request,
@@ -42,6 +42,60 @@ function makeRegistry(
     })
   }
 }
+
+describe("classifyUpdateSafety", () => {
+  test("rejects normal dependency ranges that resolve to prereleases", async () => {
+    const lockText = `{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "myapp",
+      "dependencies": {
+        "app-blocking": "^1.0.0",
+        "tool": "2.0.0"
+      }
+    }
+  },
+  "packages": {
+    "app-blocking": ["app-blocking@1.0.0", "", {}, "sha-old"],
+
+    "app-blocking/tool": ["tool@2.1.0-beta.0", "", {}, "sha-beta"],
+
+    "tool": ["tool@2.0.0", "", {}, "sha-stable"]
+  }
+}
+`
+
+    const update = {
+      requesterLockKey: "app-blocking",
+      packageName: "app-blocking",
+      fromVersion: "1.0.0",
+      toVersion: "1.1.0",
+      deduplicates: [],
+      constrainedBy: [],
+    }
+    const result = await classifyUpdateSafety(lockText, [update], {
+      fetchFn: makeRegistry(
+        { "app-blocking": ["1.1.0"] },
+        {
+          "app-blocking": {
+            "1.1.0": {
+              version: "1.1.0",
+              dependencies: { tool: "^2.0.0" },
+              dist: { integrity: "sha-new" },
+            },
+          },
+        },
+      ),
+    })
+
+    expect(result.applicableUpdates).toEqual([])
+    expect(result.skippedUpdates).toEqual([
+      { ...update, skipReason: "dependency-conflict" },
+    ])
+  })
+})
 
 describe("updateAndDedupeLockText", () => {
   test("orders metadata created from an update like bun install", async () => {

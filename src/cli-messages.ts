@@ -1,8 +1,15 @@
 import type { DuplicatePackageInfo } from "./dedupe/analyze"
-import { analyzeDuplicatePackages } from "./dedupe/analyze"
+import {
+  analyzeDuplicatePackages,
+  evaluateRangeCompatibility,
+} from "./dedupe/analyze"
 import { formatDuplicatesReport, updateIdentity } from "./dedupe/format"
 import { parseBunLock } from "./dedupe/parse"
-import type { SuggestedUpdate } from "./dedupe/update-analyze"
+import {
+  isSuggestedTarget,
+  resolveSuggestedUnlock,
+  type SuggestedUpdate,
+} from "./dedupe/update-analyze"
 import type {
   SkippedUpdate,
   UpdateAndDedupeLockResult,
@@ -156,10 +163,6 @@ export function countCannotDedupePackages(
   duplicates: DuplicatePackageInfo[],
   suggestedUpdates: SuggestedUpdate[],
 ): number {
-  const updateLockKeys = new Set(
-    suggestedUpdates.map((u) => u.requesterLockKey),
-  )
-
   return duplicates.filter((group) => {
     const hasFixable = group.versions.some(
       (v) => v.status === "can-dedupe" || v.status === "orphan",
@@ -167,11 +170,25 @@ export function countCannotDedupePackages(
     if (hasFixable) return false
 
     const cannotDedupeVersions = group.versions.filter(
-      (v) => v.status === "cannot-dedupe",
+      (v) =>
+        v.status === "cannot-dedupe" &&
+        !isSuggestedTarget(group.name, v.version, suggestedUpdates),
     )
-    const allCovered = cannotDedupeVersions.every((v) =>
-      v.requests.every((r) => updateLockKeys.has(r.requesterNodeId)),
-    )
+    const allCovered = cannotDedupeVersions.every((v) => {
+      const unlock = resolveSuggestedUnlock(
+        group.name,
+        v.version,
+        suggestedUpdates,
+      )
+      if (!unlock) return false
+
+      return v.requests.every(
+        (request) =>
+          unlock.requesterLockKeys.has(request.requesterNodeId) ||
+          evaluateRangeCompatibility(request.range, unlock.targetVersion) ===
+            true,
+      )
+    })
     return !allCovered
   }).length
 }

@@ -176,9 +176,7 @@ function canReuseExistingDependencyEntries(
     const hasCompatibleEntry = [...specsByLockKey.values()].some(
       (resolvedSpec) =>
         resolvedSpec.name === dependencyName &&
-        semver.satisfies(resolvedSpec.version, validRange, {
-          includePrerelease: true,
-        }),
+        semver.satisfies(resolvedSpec.version, validRange),
     )
     if (!hasCompatibleEntry) {
       return false
@@ -334,9 +332,7 @@ function findContextConflicts(
       if (
         !resolvedSpec ||
         !validRange ||
-        !semver.satisfies(resolvedSpec.version, validRange, {
-          includePrerelease: true,
-        })
+        !semver.satisfies(resolvedSpec.version, validRange)
       ) {
         conflicts.add(applicable)
         break

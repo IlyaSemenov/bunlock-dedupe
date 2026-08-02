@@ -1,6 +1,10 @@
 import type { DuplicatePackageInfo, DuplicateVersionInfo } from "./analyze"
 import { evaluateRangeCompatibility } from "./analyze"
-import type { SuggestedUpdate } from "./update-analyze"
+import {
+  isSuggestedTarget,
+  resolveSuggestedUnlock,
+  type SuggestedUpdate,
+} from "./update-analyze"
 import type { SkippedUpdate, UpdateSkipReason } from "./update-fix"
 
 const DEDUPE_ICON = "⬆️"
@@ -73,17 +77,22 @@ function rewriteCannotDedupeAsOrphan(
   duplicates: DuplicatePackageInfo[],
   suggestedUpdates: SuggestedUpdate[],
 ): DuplicatePackageInfo[] {
-  const updateLockKeys = new Set(
-    suggestedUpdates.map((u) => u.requesterLockKey),
-  )
-
   return duplicates.map((dup) => ({
     ...dup,
     versions: dup.versions.map((v): DuplicateVersionInfo => {
       if (v.status !== "cannot-dedupe") return v
 
+      // Update analysis assigns one shared target to every update that removes
+      // this package version; reporting must evaluate untouched requests there.
+      const unlock = resolveSuggestedUnlock(
+        dup.name,
+        v.version,
+        suggestedUpdates,
+      )
+      if (!unlock) return v
+
       const updatedRequests = v.requests.filter((r) =>
-        updateLockKeys.has(r.requesterNodeId),
+        unlock.requesterLockKeys.has(r.requesterNodeId),
       )
       if (updatedRequests.length === 0) return v
 
@@ -92,8 +101,8 @@ function rewriteCannotDedupeAsOrphan(
       // so claiming removal would misreport the outcome.
       const removable = v.requests.every(
         (r) =>
-          updateLockKeys.has(r.requesterNodeId) ||
-          evaluateRangeCompatibility(r.range, dup.targetVersion) === true,
+          unlock.requesterLockKeys.has(r.requesterNodeId) ||
+          evaluateRangeCompatibility(r.range, unlock.targetVersion) === true,
       )
       if (!removable) return v
 
@@ -282,19 +291,16 @@ function locatedReasonsForRequests(
   )
 }
 
-function hasSkippedUpdateForVersion(
+function skippedUpdateTargetForVersion(
   duplicate: DuplicatePackageInfo,
   versionInfo: DuplicateVersionInfo,
   skippedUpdates: SuggestedUpdate[],
-): boolean {
-  return skippedUpdates.some((update) =>
-    update.deduplicates.some(
-      (dedupe) =>
-        dedupe.name === duplicate.name &&
-        dedupe.fromVersion === versionInfo.version &&
-        dedupe.targetVersion === duplicate.targetVersion,
-    ),
-  )
+): string | undefined {
+  return resolveSuggestedUnlock(
+    duplicate.name,
+    versionInfo.version,
+    skippedUpdates,
+  )?.targetVersion
 }
 
 function renderPath(request: DuplicateVersionInfo["requests"][number]): string {
@@ -411,17 +417,29 @@ export function formatDuplicatesReport(
           versionInfo,
           skippedUpdateReasonsByRequester,
         )
+        const targetVersion = skippedUpdateTargetForVersion(
+          duplicate,
+          versionInfo,
+          skippedUpdates,
+        )
 
-        if (
-          manualUpdateReasons.length > 0 &&
-          hasSkippedUpdateForVersion(duplicate, versionInfo, skippedUpdates)
-        ) {
+        if (manualUpdateReasons.length > 0 && targetVersion) {
           return {
             ...versionInfo,
             displayStatus: "manual-update",
-            dedupeTargetVersion: duplicate.targetVersion,
+            dedupeTargetVersion: targetVersion,
             manualUpdateReasons,
           }
+        }
+
+        if (
+          isSuggestedTarget(
+            duplicate.name,
+            versionInfo.version,
+            suggestedUpdates,
+          )
+        ) {
+          return { ...versionInfo, status: "target" }
         }
 
         return versionInfo

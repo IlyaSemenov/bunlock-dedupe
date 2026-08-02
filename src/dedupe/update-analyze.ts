@@ -26,6 +26,10 @@ type VersionUnlock = {
   targetVersion: string
 }
 
+type CandidateVersionUnlock = Omit<VersionUnlock, "targetVersion"> & {
+  compatibleTargetVersions: string[]
+}
+
 /**
  * A single semver range that constrains updates to a blocking package.
  *
@@ -55,6 +59,73 @@ export type SuggestedUpdate = {
   deduplicates: VersionUnlock[]
   /** Inbound parent/workspace ranges that the selected `toVersion` satisfies. */
   constrainedBy: InboundRangeConstraint[]
+}
+
+type CandidateUpdate = Omit<SuggestedUpdate, "deduplicates"> & {
+  deduplicates: CandidateVersionUnlock[]
+}
+
+function versionUnlockKey(name: string, fromVersion: string): string {
+  return `${name}\0${fromVersion}`
+}
+
+function requesterUnlockKey(
+  requesterLockKey: string,
+  name: string,
+  fromVersion: string,
+): string {
+  return `${requesterLockKey}\0${versionUnlockKey(name, fromVersion)}`
+}
+
+function isUpdateTarget(
+  versionInfo: DuplicatePackageInfo["versions"][number],
+  fromVersion: string,
+): boolean {
+  return (
+    (versionInfo.status === "target" ||
+      versionInfo.status === "cannot-dedupe") &&
+    Boolean(semver.valid(versionInfo.version)) &&
+    Boolean(semver.valid(fromVersion)) &&
+    semver.gt(versionInfo.version, fromVersion)
+  )
+}
+
+export function resolveSuggestedUnlock(
+  name: string,
+  fromVersion: string,
+  updates: SuggestedUpdate[],
+): { targetVersion: string; requesterLockKeys: Set<string> } | undefined {
+  let targetVersion: string | undefined
+  const requesterLockKeys = new Set<string>()
+
+  for (const update of updates) {
+    const unlock = update.deduplicates.find(
+      (candidate) =>
+        candidate.name === name && candidate.fromVersion === fromVersion,
+    )
+    if (!unlock) continue
+    // Callers may supply precomputed suggestions, so keep reporting
+    // conservative if they disagree on the target for one source version.
+    if (targetVersion && targetVersion !== unlock.targetVersion)
+      return undefined
+
+    targetVersion = unlock.targetVersion
+    requesterLockKeys.add(update.requesterLockKey)
+  }
+
+  return targetVersion ? { targetVersion, requesterLockKeys } : undefined
+}
+
+export function isSuggestedTarget(
+  name: string,
+  version: string,
+  updates: SuggestedUpdate[],
+): boolean {
+  return updates.some((update) =>
+    update.deduplicates.some(
+      (unlock) => unlock.name === name && unlock.targetVersion === version,
+    ),
+  )
 }
 
 export type UpdateAnalysisResult = {
@@ -128,44 +199,67 @@ function collectBlockedDuplicates(
 }
 
 /**
- * A candidate package version is useful only when its dependency ranges accept
- * every duplicate target version that the current requester blocks.
+ * A candidate package version is useful only when each blocked dependency can
+ * reach at least one target retained by duplicate analysis.
  *
  * @param candidateMeta Registry metadata for a possible newer requester
  * version.
  * @param blockedDuplicateNames Duplicate package names requested too narrowly
  * by the current requester.
  */
-function candidateUnlocksDeduplication(
+function candidateDedupeTargets(
   candidateMeta: {
     dependencies?: Record<string, string>
     peerDependencies?: Record<string, string>
     optionalDependencies?: Record<string, string>
   },
+  requesterLockKey: string,
   blockedDuplicateNames: string[],
   duplicates: DuplicatePackageInfo[],
-): boolean {
+): CandidateVersionUnlock[] | null {
   const candidateDeps = {
     ...candidateMeta.dependencies,
     ...candidateMeta.optionalDependencies,
     ...candidateMeta.peerDependencies,
   }
+  const unlocks: CandidateVersionUnlock[] = []
 
   for (const dupName of blockedDuplicateNames) {
     const dupGroup = duplicates.find((d) => d.name === dupName)
-    if (!dupGroup) continue
+    if (!dupGroup) return null
 
     const candidateRange = candidateDeps[dupName]
-    if (candidateRange === undefined) continue
-
-    const compat = evaluateRangeCompatibility(
-      candidateRange,
-      dupGroup.targetVersion,
+    const fromVersionInfo = dupGroup.versions.find((version) =>
+      version.requests.some(
+        (request) => request.requesterNodeId === requesterLockKey,
+      ),
     )
-    if (compat !== true) return false
+    if (!fromVersionInfo) return null
+
+    const fromVersion = fromVersionInfo.version
+    const targetVersions = dupGroup.versions
+      .filter((version) => isUpdateTarget(version, fromVersion))
+      .map((version) => version.version)
+    // Dropping the dependency removes its request entirely; otherwise retain
+    // every target the candidate accepts for the later requester intersection.
+    const compatibleTargetVersions =
+      candidateRange === undefined
+        ? targetVersions
+        : targetVersions.filter(
+            (targetVersion) =>
+              evaluateRangeCompatibility(candidateRange, targetVersion) ===
+              true,
+          )
+    if (compatibleTargetVersions.length === 0) return null
+
+    unlocks.push({
+      name: dupName,
+      fromVersion,
+      compatibleTargetVersions,
+    })
   }
 
-  return true
+  return unlocks
 }
 
 function isNonSemverRange(range: string): boolean {
@@ -404,7 +498,7 @@ async function findBestCandidate(
   info: RequesterInfo,
   duplicates: DuplicatePackageInfo[],
   options?: UpdateAnalysisOptions,
-): Promise<SuggestedUpdate | null> {
+): Promise<CandidateUpdate | null> {
   const ranges = info.inboundRanges.map((r) => r.range)
 
   const candidates = await fetchCompatibleVersions(info.packageName, {
@@ -437,25 +531,13 @@ async function findBestCandidate(
     })
     if (!meta) continue
 
-    if (
-      candidateUnlocksDeduplication(
-        meta,
-        info.blockedDuplicateNames,
-        duplicates,
-      )
-    ) {
-      const unlocked = info.blockedDuplicateNames.map((dupName) => {
-        const dup = duplicates.find((d) => d.name === dupName)
-        const fromVersion =
-          dup?.versions.find((v) =>
-            v.requests.some((r) => r.requesterNodeId === info.lockKey),
-          )?.version ?? "?"
-        return {
-          name: dupName,
-          fromVersion,
-          targetVersion: dup?.targetVersion ?? "?",
-        }
-      })
+    const unlocked = candidateDedupeTargets(
+      meta,
+      info.lockKey,
+      info.blockedDuplicateNames,
+      duplicates,
+    )
+    if (unlocked) {
       return {
         requesterLockKey: info.lockKey,
         packageName: info.packageName,
@@ -481,36 +563,79 @@ async function findBestCandidate(
  * dependency range the resulting lockfile cannot satisfy.
  */
 function pruneIncompleteUnlocks(
-  suggestedUpdates: SuggestedUpdate[],
+  suggestedUpdates: CandidateUpdate[],
   duplicates: DuplicatePackageInfo[],
 ): SuggestedUpdate[] {
-  const updatedRequesters = new Set(
-    suggestedUpdates.map((update) => update.requesterLockKey),
-  )
-  const stuckVersions = new Set<string>()
+  const selectedTargets = new Map<string, string>()
+  const compatibleTargetsByRequester = new Map<string, Set<string>>()
+
+  for (const update of suggestedUpdates) {
+    for (const unlock of update.deduplicates) {
+      compatibleTargetsByRequester.set(
+        requesterUnlockKey(
+          update.requesterLockKey,
+          unlock.name,
+          unlock.fromVersion,
+        ),
+        new Set(unlock.compatibleTargetVersions),
+      )
+    }
+  }
 
   for (const duplicate of duplicates) {
     for (const versionInfo of duplicate.versions) {
       if (versionInfo.status !== "cannot-dedupe") continue
 
-      const unlockable = versionInfo.requests.every(
-        (request) =>
-          evaluateRangeCompatibility(request.range, duplicate.targetVersion) ===
-            true || updatedRequesters.has(request.requesterNodeId),
-      )
-      if (!unlockable) {
-        stuckVersions.add(`${duplicate.name}@${versionInfo.version}`)
+      // Eligible retained versions are already ordered newest first. Choose
+      // the first accepted by every unchanged request or proposed update.
+      const targetVersion = duplicate.versions
+        .filter((candidate) => isUpdateTarget(candidate, versionInfo.version))
+        .map((candidate) => candidate.version)
+        .find((candidateVersion) =>
+          versionInfo.requests.every(
+            (request) =>
+              evaluateRangeCompatibility(request.range, candidateVersion) ===
+                true ||
+              compatibleTargetsByRequester
+                .get(
+                  requesterUnlockKey(
+                    request.requesterNodeId,
+                    duplicate.name,
+                    versionInfo.version,
+                  ),
+                )
+                ?.has(candidateVersion) === true,
+          ),
+        )
+
+      if (targetVersion) {
+        selectedTargets.set(
+          versionUnlockKey(duplicate.name, versionInfo.version),
+          targetVersion,
+        )
       }
     }
   }
 
+  // Strip candidate-only compatibility sets once all requesters converge on
+  // one target for each duplicate version.
   return suggestedUpdates
-    .map((update) => ({
-      ...update,
-      deduplicates: update.deduplicates.filter(
-        (unlock) => !stuckVersions.has(`${unlock.name}@${unlock.fromVersion}`),
-      ),
-    }))
+    .map(
+      (update): SuggestedUpdate => ({
+        ...update,
+        deduplicates: update.deduplicates.flatMap(
+          ({ compatibleTargetVersions, ...unlock }) => {
+            const targetVersion = selectedTargets.get(
+              versionUnlockKey(unlock.name, unlock.fromVersion),
+            )
+            return targetVersion &&
+              compatibleTargetVersions.includes(targetVersion)
+              ? [{ ...unlock, targetVersion }]
+              : []
+          },
+        ),
+      }),
+    )
     .filter((update) => update.deduplicates.length > 0)
 }
 
@@ -546,7 +671,7 @@ export async function analyzeDuplicatePackagesWithUpdates(
     }),
   )
   const suggestedUpdates = pruneIncompleteUnlocks(
-    results.filter((u): u is SuggestedUpdate => u !== null),
+    results.filter((u): u is CandidateUpdate => u !== null),
     duplicates,
   )
 

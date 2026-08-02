@@ -1,0 +1,25 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "dependencies": {
+        "old-parent": "^1.0.0",
+        "prerelease-parent": "1.0.0",
+        "vite": "^8.1.0",
+      },
+    },
+  },
+  "packages": {
+    "old-parent": ["old-parent@1.0.0", "", { "dependencies": { "vite": "^7.0.0" } }, "sha"],
+
+    "old-parent/vite": ["vite@7.9.0", "", {}, "sha-old-major"],
+
+    "prerelease-parent": ["prerelease-parent@1.0.0", "", { "dependencies": { "vite": "^8.2.0-beta.0" } }, "sha"],
+
+    "prerelease-parent/vite": ["vite@8.2.0-beta.0", "", {}, "sha-beta"],
+
+    "vite": ["vite@8.1.5", "", {}, "sha-stable"],
+  },
+}

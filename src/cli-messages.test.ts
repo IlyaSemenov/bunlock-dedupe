@@ -258,14 +258,21 @@ describe("countCannotDedupePackages", () => {
     }
   }
 
-  function makeUpdate(lockKey: string): SuggestedUpdate {
+  function makeUpdate(
+    lockKey: string,
+    dependencyName: string,
+  ): SuggestedUpdate {
     return {
       requesterLockKey: lockKey,
       packageName: "blocker",
       fromVersion: "1.0.0",
       toVersion: "1.1.0",
       deduplicates: [
-        { name: "dep", fromVersion: "1.0.0", targetVersion: "2.0.0" },
+        {
+          name: dependencyName,
+          fromVersion: "1.0.0",
+          targetVersion: "2.0.0",
+        },
       ],
       constrainedBy: [
         { requesterLabel: "root", requesterPath: ["root"], range: "^1.0.0" },
@@ -279,13 +286,13 @@ describe("countCannotDedupePackages", () => {
 
   test("cannot-dedupe fully covered by update", () => {
     const groups = [makeCannotDedupeGroup("dep-a", "blocker")]
-    const updates = [makeUpdate("blocker")]
+    const updates = [makeUpdate("blocker", "dep-a")]
     expect(countCannotDedupePackages(groups, updates)).toBe(0)
   })
 
   test("cannot-dedupe not covered by update", () => {
     const groups = [makeCannotDedupeGroup("dep-a", "other-blocker")]
-    const updates = [makeUpdate("blocker")]
+    const updates = [makeUpdate("blocker", "dep-a")]
     expect(countCannotDedupePackages(groups, updates)).toBe(1)
   })
 
@@ -295,7 +302,7 @@ describe("countCannotDedupePackages", () => {
       makeCannotDedupeGroup("dep-b", "blocker"),
       makeCannotDedupeGroup("dep-c", "other"),
     ]
-    const updates = [makeUpdate("blocker")]
+    const updates = [makeUpdate("blocker", "dep-b")]
     expect(countCannotDedupePackages(groups, updates)).toBe(1)
   })
 })

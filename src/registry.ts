@@ -348,7 +348,7 @@ export async function fetchCompatibleVersions(
     return ranges.every((range) => {
       const valid = semver.validRange(range)
       if (!valid) return false
-      return semver.satisfies(version, valid, { includePrerelease: true })
+      return semver.satisfies(version, valid)
     })
   }
 

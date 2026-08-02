@@ -240,9 +240,7 @@ export function evaluateRangeCompatibility(
     return undefined
   }
 
-  return semver.satisfies(targetVersion, validRange, {
-    includePrerelease: true,
-  })
+  return semver.satisfies(targetVersion, validRange)
 }
 
 function workspaceNodeId(workspacePath: string): string {

@@ -95,6 +95,27 @@ describe("fetchCompatibleVersions (online)", () => {
     expect(result).toEqual(["1.2.0", "1.1.0"])
   })
 
+  test("excludes prereleases unless the range explicitly includes them", async () => {
+    const meta = {
+      versions: {
+        "8.1.5": {},
+        "8.2.0-beta.0": {},
+      },
+    }
+
+    const stableResult = await fetchCompatibleVersions("pkg", {
+      ranges: ["^8.0.0"],
+      fetchFn: makeFetch({ "https://registry.npmjs.org/pkg": meta }),
+    })
+    const prereleaseResult = await fetchCompatibleVersions("pkg", {
+      ranges: ["^8.2.0-beta.0"],
+      fetchFn: makeFetch({ "https://registry.npmjs.org/pkg": meta }),
+    })
+
+    expect(stableResult).toEqual(["8.1.5"])
+    expect(prereleaseResult).toEqual(["8.2.0-beta.0"])
+  })
+
   test("returns empty array when no versions match", async () => {
     const result = await fetchCompatibleVersions("pkg", {
       ranges: ["^3.0.0"],

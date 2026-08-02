@@ -1,0 +1,17 @@
+vite:
+  ✅ 8.2.0-beta.0
+    used by:
+      - example > prerelease-parent: ^8.2.0-beta.0
+  ✅ 8.1.5
+    used by:
+      - example: ^8.1.0
+  🗑️ 7.9.0
+    used by:
+      - example > old-parent: ^7.0.0
+    removed after:
+      - old-parent: 1.0.0 → 1.1.0
+
+1 duplicate package in bun.lock.
+1 intermediate package can be updated to unlock deduplication.
+
+Run with --update --fix to update intermediate packages and apply dedupes.
