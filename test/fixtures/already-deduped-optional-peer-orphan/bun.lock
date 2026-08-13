@@ -1,0 +1,30 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "devDependencies": {
+        "@nuxt/test-utils": "4.1.0",
+        "other": "1.0.0",
+      },
+    },
+  },
+  "packages": {
+    "@nuxt/test-utils": ["@nuxt/test-utils@4.1.0", "", { "dependencies": { "h3": "^1.15.11" }, "peerDependencies": { "h3-next": ">=2.0.1-rc.22" }, "optionalPeers": ["h3-next"] }, "sha-test-utils"],
+
+    "crossws": ["crossws@0.3.5", "", {}, "sha-crossws"],
+
+    "h3": ["h3@1.15.11", "", { "dependencies": { "crossws": "^0.3.5" } }, "sha-h3"],
+
+    "h3-next": ["h3@2.0.1-rc.20", "", { "dependencies": { "rou3": "^0.8.1", "srvx": "^0.11.13" }, "peerDependencies": { "crossws": "^0.4.1" }, "optionalPeers": ["crossws"] }, "sha-h3-next"],
+
+    "other": ["other@1.0.0", "", { "dependencies": { "rou3": "^0.9.1", "srvx": "^0.11.22" } }, "sha-other"],
+
+    "rou3": ["rou3@0.9.1", "", {}, "sha-rou3"],
+
+    "srvx": ["srvx@0.11.22", "", {}, "sha-srvx"],
+
+    "h3-next/rou3": ["rou3@0.8.1", "", {}, "sha-nested-rou3"],
+  },
+}

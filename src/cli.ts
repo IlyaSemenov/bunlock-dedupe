@@ -220,17 +220,23 @@ async function run(): Promise<void> {
 
   const result = dedupeLockText(lockText)
   if (!result.changed) {
-    const fixSummary = buildFixSummary(duplicates, 0, 0)
+    const fixSummary = buildFixSummary({
+      duplicateGroups: duplicates,
+      fixedPackages: 0,
+      fixedEntries: 0,
+      removedEntries: 0,
+    })
     console.log(formatFixSummary(fixSummary, lockPath))
     return
   }
 
   writeFileSync(lockPath, result.lockText, "utf8")
-  const fixSummary = buildFixSummary(
-    duplicates,
-    result.rewrittenPackages,
-    result.touchedEntries,
-  )
+  const fixSummary = buildFixSummary({
+    duplicateGroups: duplicates,
+    fixedPackages: result.rewrittenPackages,
+    fixedEntries: result.rewrittenEntries,
+    removedEntries: result.prunedEntries,
+  })
   console.log(formatFixSummary(fixSummary, lockPath))
 }
 

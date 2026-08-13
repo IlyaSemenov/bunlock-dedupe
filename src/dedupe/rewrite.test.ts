@@ -165,6 +165,45 @@ describe("dedupeLockText", () => {
     expect(result.lockText).not.toContain('"stale-leaf"')
   })
 
+  test("counts dedupe rewrites separately from unrelated orphan cleanup", () => {
+    const lockText = `{
+  "workspaces": {
+    "": {
+      "name": "example",
+      "dependencies": {
+        "app": "1.0.0",
+        "peer-host": "1.0.0",
+        "shared": "^2.0.0"
+      }
+    }
+  },
+  "packages": {
+    "app": ["app@1.0.0", "", { "dependencies": { "shared": ">=1.0.0" } }],
+    "app/shared": ["shared@1.0.0"],
+    "orphan-peer": ["orphan-peer@1.0.0"],
+    "peer-host": ["peer-host@1.0.0", "", { "peerDependencies": { "orphan-peer": "^2.0.0" }, "optionalPeers": ["orphan-peer"] }],
+    "shared": ["shared@2.0.0"]
+  }
+}`
+
+    const result = dedupeLockText(lockText)
+
+    expect(result).toMatchObject({
+      changed: true,
+      touchedEntries: 2,
+      rewrittenEntries: 1,
+      prunedEntries: 1,
+      rewrittenPackages: 1,
+    })
+    expect(result.lockText).not.toContain('"app/shared"')
+    expect(
+      Object.hasOwn(
+        parseBunLock(result.lockText).packages ?? {},
+        "orphan-peer",
+      ),
+    ).toBe(false)
+  })
+
   test("does not copy bundled markers out of their original context", () => {
     const lockText = `{
   "lockfileVersion": 1,

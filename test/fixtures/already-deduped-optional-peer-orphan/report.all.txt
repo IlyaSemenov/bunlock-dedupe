@@ -1,0 +1,19 @@
+h3:
+  ✅ 2.0.1-rc.20
+  ❌ 1.15.11
+    blocked by:
+      - example > @nuxt/test-utils: ^1.15.11
+
+rou3:
+  ✅ 0.9.1
+    used by:
+      - example > other: ^0.9.1
+  ❌ 0.8.1
+    blocked by:
+      - h3: ^0.8.1
+
+2 duplicate packages in bun.lock.
+2 packages cannot be deduped.
+2 unreachable entries can be removed.
+
+Run with --fix to remove unreachable entries.

@@ -23,8 +23,12 @@ export type DedupeLockResult = {
   /** True when returned `lockText` should replace the input. */
   changed: boolean
   lockText: string
-  /** Number of package entries rewritten or removed across all passes. */
+  /** Total entries touched; equals `rewrittenEntries + prunedEntries`. */
   touchedEntries: number
+  /** Number of entries touched by dedupe rewrites across all passes. */
+  rewrittenEntries: number
+  /** Number of unreachable package entries removed across all passes. */
+  prunedEntries: number
   /** Number of distinct package names directly rewritten for deduplication. */
   rewrittenPackages: number
 }
@@ -444,7 +448,6 @@ function rewriteEntries(
 
   if (touchedEntries > 0) {
     touchedEntries += pruneRedundantNestedEntries(lock, packages)
-    touchedEntries += pruneUnreachableEntries(lock, packages)
   }
 
   return {
@@ -568,9 +571,8 @@ export function renderBunLock(lock: BunLockFile): string {
 /**
  * Parse, rewrite, prune, and render a bun.lock string.
  *
- * The fixed-point loop is intentional: one dedupe can make another nested
- * entry redundant or reachable through a newer target only after the first pass
- * has changed the graph.
+ * The fixed-point loop is intentional: rewrites and standalone unreachable
+ * pruning can each change the graph enough to unlock another dedupe pass.
  *
  * @param lockText Raw `bun.lock` text, not a parsed object, so the full
  * parse/rewrite/render path is exercised.
@@ -581,15 +583,21 @@ export function dedupeLockText(lockText: string): DedupeLockResult {
   parsedLock.packages = packages
 
   let touchedEntries = 0
+  let rewrittenEntries = 0
+  let prunedEntries = 0
   const touchedPackageNames = new Set<string>()
 
   for (let pass = 0; pass < 50; pass += 1) {
     const duplicateGroups = analyzeDuplicatePackages(parsedLock)
     const rewrites = collectVersionRewrites(duplicateGroups)
     const rewriteResult = rewriteEntries(parsedLock, packages, rewrites)
-    if (rewriteResult.touchedEntries === 0) break
+    const passPrunedEntries = pruneUnreachableEntries(parsedLock, packages)
+    const passTouchedEntries = rewriteResult.touchedEntries + passPrunedEntries
+    if (passTouchedEntries === 0) break
 
-    touchedEntries += rewriteResult.touchedEntries
+    touchedEntries += passTouchedEntries
+    rewrittenEntries += rewriteResult.touchedEntries
+    prunedEntries += passPrunedEntries
     for (const name of rewriteResult.touchedPackageNames) {
       touchedPackageNames.add(name)
     }
@@ -600,6 +608,8 @@ export function dedupeLockText(lockText: string): DedupeLockResult {
       changed: false,
       lockText,
       touchedEntries: 0,
+      rewrittenEntries: 0,
+      prunedEntries: 0,
       rewrittenPackages: 0,
     }
   }
@@ -608,6 +618,8 @@ export function dedupeLockText(lockText: string): DedupeLockResult {
     changed: true,
     lockText: renderBunLock(parsedLock),
     touchedEntries,
+    rewrittenEntries,
+    prunedEntries,
     rewrittenPackages: touchedPackageNames.size,
   }
 }

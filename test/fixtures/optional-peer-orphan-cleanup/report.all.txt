@@ -8,5 +8,6 @@
 
 1 duplicate package in bun.lock.
 1 package can be deduped.
+2 unreachable entries can be removed.
 
-Run with --fix to apply available dedupes.
+Run with --fix to apply available dedupes and remove unreachable entries.

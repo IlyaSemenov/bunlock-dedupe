@@ -121,6 +121,44 @@ describe("formatReportSummary", () => {
     )
   })
 
+  test("prune-only cleanup", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 2,
+      readyPackages: 0,
+      cleanupEntries: 2,
+      intermediatePackages: 0,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
+      cannotDedupePackages: 2,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "2 duplicate packages in /project/bun.lock.\n" +
+        "2 packages cannot be deduped.\n" +
+        "2 unreachable entries can be removed.\n" +
+        "\n" +
+        "Run with --fix to remove unreachable entries.",
+    )
+  })
+
+  test("mixed dedupe and cleanup", () => {
+    const summary: ReportSummary = {
+      totalDuplicatePackages: 1,
+      readyPackages: 1,
+      cleanupEntries: 2,
+      intermediatePackages: 0,
+      manualUpdatePackages: 0,
+      manualUpdateDedupePackages: 0,
+      cannotDedupePackages: 0,
+    }
+    expect(formatReportSummary(summary, lockPath)).toBe(
+      "1 duplicate package in /project/bun.lock.\n" +
+        "1 package can be deduped.\n" +
+        "2 unreachable entries can be removed.\n" +
+        "\n" +
+        "Run with --fix to apply available dedupes and remove unreachable entries.",
+    )
+  })
+
   test("unknown only", () => {
     const summary: ReportSummary = {
       totalDuplicatePackages: 1,
@@ -327,30 +365,75 @@ describe("countCannotDedupePackages", () => {
 
 describe("buildFixSummary", () => {
   test("no duplicates → clean", () => {
-    expect(buildFixSummary(makeGroups(0), 0, 0)).toEqual({ kind: "clean" })
+    expect(
+      buildFixSummary({
+        duplicateGroups: makeGroups(0),
+        fixedPackages: 0,
+        fixedEntries: 0,
+        removedEntries: 0,
+      }),
+    ).toEqual({ kind: "clean" })
   })
 
   test("duplicates but nothing fixed → no-auto-fix", () => {
-    expect(buildFixSummary(makeGroups(3), 0, 0)).toEqual({
+    expect(
+      buildFixSummary({
+        duplicateGroups: makeGroups(3),
+        fixedPackages: 0,
+        fixedEntries: 0,
+        removedEntries: 0,
+      }),
+    ).toEqual({
       kind: "no-auto-fix",
       totalDuplicatePackages: 3,
     })
   })
 
+  test("prune-only cleanup", () => {
+    expect(
+      buildFixSummary({
+        duplicateGroups: makeGroups(3),
+        fixedPackages: 0,
+        fixedEntries: 0,
+        removedEntries: 2,
+      }),
+    ).toEqual({
+      kind: "cleaned",
+      removedEntries: 2,
+      remainingPackages: 3,
+    })
+  })
+
   test("all fixed, nothing remaining", () => {
-    expect(buildFixSummary(makeGroups(3), 3, 14)).toEqual({
+    expect(
+      buildFixSummary({
+        duplicateGroups: makeGroups(3),
+        fixedPackages: 3,
+        fixedEntries: 14,
+        removedEntries: 0,
+      }),
+    ).toEqual({
       kind: "fixed",
       fixedPackages: 3,
       fixedEntries: 14,
+      removedEntries: 0,
       remainingPackages: 0,
     })
   })
 
   test("some fixed, some remaining", () => {
-    expect(buildFixSummary(makeGroups(5), 3, 14)).toEqual({
+    expect(
+      buildFixSummary({
+        duplicateGroups: makeGroups(5),
+        fixedPackages: 3,
+        fixedEntries: 14,
+        removedEntries: 0,
+      }),
+    ).toEqual({
       kind: "fixed",
       fixedPackages: 3,
       fixedEntries: 14,
+      removedEntries: 0,
       remainingPackages: 2,
     })
   })
@@ -387,6 +470,18 @@ describe("formatFixSummary", () => {
     )
   })
 
+  test("prune-only cleanup", () => {
+    expect(
+      formatFixSummary(
+        { kind: "cleaned", removedEntries: 2, remainingPackages: 3 },
+        lockPath,
+      ),
+    ).toBe(
+      "Removed 2 unreachable entries from /project/bun.lock.\n" +
+        "3 packages cannot be deduped.",
+    )
+  })
+
   test("fixed, nothing remaining", () => {
     expect(
       formatFixSummary(
@@ -394,6 +489,7 @@ describe("formatFixSummary", () => {
           kind: "fixed",
           fixedPackages: 3,
           fixedEntries: 14,
+          removedEntries: 0,
           remainingPackages: 0,
         },
         lockPath,
@@ -408,6 +504,7 @@ describe("formatFixSummary", () => {
           kind: "fixed",
           fixedPackages: 3,
           fixedEntries: 14,
+          removedEntries: 0,
           remainingPackages: 2,
         },
         lockPath,
@@ -425,6 +522,7 @@ describe("formatFixSummary", () => {
           kind: "fixed",
           fixedPackages: 1,
           fixedEntries: 1,
+          removedEntries: 0,
           remainingPackages: 1,
         },
         lockPath,
@@ -432,6 +530,23 @@ describe("formatFixSummary", () => {
     ).toBe(
       "Deduped 1 entry across 1 package in /project/bun.lock.\n" +
         "1 package cannot be deduped.",
+    )
+  })
+
+  test("mixed dedupe and cleanup", () => {
+    expect(
+      formatFixSummary(
+        {
+          kind: "fixed",
+          fixedPackages: 1,
+          fixedEntries: 1,
+          removedEntries: 2,
+          remainingPackages: 0,
+        },
+        lockPath,
+      ),
+    ).toBe(
+      "Deduped 1 entry across 1 package and removed 2 unreachable entries in /project/bun.lock.",
     )
   })
 })
@@ -471,12 +586,29 @@ describe("formatUpdateFixSummary", () => {
           updatedPackages: 1,
           dedupedEntries: 3,
           dedupedPackages: 2,
+          prunedEntries: 0,
         },
         lockPath,
       ),
     ).toBe(
       "Updated 2 entries across 1 intermediate package and deduped 3 entries across 2 packages in /project/bun.lock.",
     )
+  })
+
+  test("prune-only cleanup", () => {
+    expect(
+      formatUpdateFixSummary(
+        {
+          kind: "updated",
+          updatedEntries: 0,
+          updatedPackages: 0,
+          dedupedEntries: 0,
+          dedupedPackages: 0,
+          prunedEntries: 2,
+        },
+        lockPath,
+      ),
+    ).toBe("Removed 2 unreachable entries from /project/bun.lock.")
   })
 
   test("updated and deduped with manual opportunities", () => {
@@ -488,6 +620,7 @@ describe("formatUpdateFixSummary", () => {
           updatedPackages: 1,
           dedupedEntries: 1,
           dedupedPackages: 1,
+          prunedEntries: 0,
           skippedUpdateCount: 1,
           skippedPackageCount: 1,
           skippedDedupePackageCount: 1,
@@ -497,6 +630,24 @@ describe("formatUpdateFixSummary", () => {
     ).toBe(
       "Updated 1 entry across 1 intermediate package and deduped 1 entry across 1 package in /project/bun.lock.\n" +
         "1 more package could be deduped by manually updating 1 intermediate dependency.",
+    )
+  })
+
+  test("updated, deduped, and cleaned", () => {
+    expect(
+      formatUpdateFixSummary(
+        {
+          kind: "updated",
+          updatedEntries: 1,
+          updatedPackages: 1,
+          dedupedEntries: 1,
+          dedupedPackages: 1,
+          prunedEntries: 2,
+        },
+        lockPath,
+      ),
+    ).toBe(
+      "Updated 1 entry across 1 intermediate package and deduped 1 entry across 1 package and removed 2 unreachable entries in /project/bun.lock.",
     )
   })
 })
@@ -558,6 +709,7 @@ describe("formatUpdateFixReport", () => {
         updatedPackages: 1,
         dedupedEntries: 1,
         dedupedPackages: 1,
+        prunedEntries: 0,
         suggestedUpdates: [update],
         appliedUpdates: [update],
         skippedUpdates: [],
@@ -586,6 +738,7 @@ describe("formatUpdateFixReport", () => {
         updatedPackages: 0,
         dedupedEntries: 0,
         dedupedPackages: 0,
+        prunedEntries: 0,
         suggestedUpdates: [update],
         appliedUpdates: [],
         skippedUpdates: [skipped],

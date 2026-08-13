@@ -30,7 +30,10 @@ export function formatReportOutput(
 
 export function formatReport(
   duplicates: DuplicatePackageInfo[],
-  dedupeResult: { rewrittenPackages: number; touchedEntries: number },
+  dedupeResult: {
+    rewrittenPackages: number
+    prunedEntries?: number
+  },
   lockPath: string,
   options?: {
     includeUnfixable?: boolean
@@ -57,6 +60,7 @@ export function formatReport(
 export type ReportSummary = {
   totalDuplicatePackages: number
   readyPackages: number
+  cleanupEntries?: number
   intermediatePackages: number
   manualUpdatePackages: number
   manualUpdateDedupePackages: number
@@ -66,11 +70,15 @@ export type ReportSummary = {
 
 export function buildReportSummary(
   duplicateGroups: DuplicatePackageInfo[],
-  dedupeResult: { rewrittenPackages: number; touchedEntries: number },
+  dedupeResult: {
+    rewrittenPackages: number
+    prunedEntries?: number
+  },
   suggestedUpdates?: SuggestedUpdate[],
   skippedUpdates?: SkippedUpdate[],
 ): ReportSummary {
   const readyPackages = dedupeResult.rewrittenPackages
+  const cleanupEntries = dedupeResult.prunedEntries ?? 0
   const skippedUpdateIds = new Set((skippedUpdates ?? []).map(updateIdentity))
   const appliedUpdates = (suggestedUpdates ?? []).filter(
     (update) => !skippedUpdateIds.has(updateIdentity(update)),
@@ -99,6 +107,7 @@ export function buildReportSummary(
   return {
     totalDuplicatePackages: duplicateGroups.length,
     readyPackages,
+    cleanupEntries,
     intermediatePackages,
     manualUpdatePackages,
     manualUpdateDedupePackages,
@@ -111,14 +120,19 @@ export function formatReportSummary(
   summary: ReportSummary,
   lockPath: string,
 ): string {
-  if (summary.totalDuplicatePackages === 0) {
+  const cleanupEntries = summary.cleanupEntries ?? 0
+  if (summary.totalDuplicatePackages === 0 && cleanupEntries === 0) {
     return `All clean — no duplicate packages in ${lockPath}.`
   }
 
   const lines: string[] = []
-  lines.push(
-    `${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}.`,
-  )
+  if (summary.totalDuplicatePackages === 0) {
+    lines.push(`No duplicate packages in ${lockPath}.`)
+  } else {
+    lines.push(
+      `${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}.`,
+    )
+  }
 
   if (summary.readyPackages > 0) {
     lines.push(
@@ -154,13 +168,25 @@ export function formatReportSummary(
     )
   }
 
-  const canFix = summary.readyPackages > 0
+  if (cleanupEntries > 0) {
+    lines.push(
+      `${plural(cleanupEntries, "unreachable entry", "unreachable entries")} can be removed.`,
+    )
+  }
+
+  const canFix = summary.readyPackages > 0 || cleanupEntries > 0
   const canUpdate = summary.intermediatePackages > 0
 
   if (canFix || canUpdate) {
     lines.push("")
-    if (canFix) {
-      lines.push("Run with --fix to apply available dedupes.")
+    if (summary.readyPackages > 0) {
+      lines.push(
+        cleanupEntries > 0
+          ? "Run with --fix to apply available dedupes and remove unreachable entries."
+          : "Run with --fix to apply available dedupes.",
+      )
+    } else if (cleanupEntries > 0) {
+      lines.push("Run with --fix to remove unreachable entries.")
     }
     if (canUpdate) {
       lines.push(
@@ -219,17 +245,36 @@ export type FixSummary =
   | { kind: "clean" }
   | { kind: "no-auto-fix"; totalDuplicatePackages: number }
   | {
+      kind: "cleaned"
+      removedEntries: number
+      remainingPackages: number
+    }
+  | {
       kind: "fixed"
       fixedPackages: number
       fixedEntries: number
+      removedEntries: number
       remainingPackages: number
     }
 
-export function buildFixSummary(
-  duplicateGroups: DuplicatePackageInfo[],
-  fixedPackages: number,
-  fixedEntries: number,
-): FixSummary {
+export function buildFixSummary({
+  duplicateGroups,
+  fixedPackages,
+  fixedEntries,
+  removedEntries,
+}: {
+  duplicateGroups: DuplicatePackageInfo[]
+  fixedPackages: number
+  fixedEntries: number
+  removedEntries: number
+}): FixSummary {
+  if (fixedPackages === 0 && removedEntries > 0) {
+    return {
+      kind: "cleaned",
+      removedEntries,
+      remainingPackages: duplicateGroups.length,
+    }
+  }
   if (duplicateGroups.length === 0) {
     return { kind: "clean" }
   }
@@ -243,6 +288,7 @@ export function buildFixSummary(
     kind: "fixed",
     fixedPackages,
     fixedEntries,
+    removedEntries,
     remainingPackages: duplicateGroups.length - fixedPackages,
   }
 }
@@ -257,11 +303,22 @@ export function formatFixSummary(
   if (summary.kind === "no-auto-fix") {
     return `${plural(summary.totalDuplicatePackages, "duplicate package", "duplicate packages")} in ${lockPath}.\nNone can be deduped.`
   }
+  if (summary.kind === "cleaned") {
+    const remainingNote =
+      summary.remainingPackages > 0
+        ? `\n${plural(summary.remainingPackages, "package", "packages")} cannot be deduped.`
+        : ""
+    return `Removed ${plural(summary.removedEntries, "unreachable entry", "unreachable entries")} from ${lockPath}.${remainingNote}`
+  }
   const remainingNote =
     summary.remainingPackages > 0
       ? `\n${plural(summary.remainingPackages, "package", "packages")} cannot be deduped.`
       : ""
-  return `Deduped ${plural(summary.fixedEntries, "entry", "entries")} across ${plural(summary.fixedPackages, "package", "packages")} in ${lockPath}.${remainingNote}`
+  const cleanupText =
+    summary.removedEntries > 0
+      ? ` and removed ${plural(summary.removedEntries, "unreachable entry", "unreachable entries")}`
+      : ""
+  return `Deduped ${plural(summary.fixedEntries, "entry", "entries")} across ${plural(summary.fixedPackages, "package", "packages")}${cleanupText} in ${lockPath}.${remainingNote}`
 }
 
 // --- Update fix report (--update --fix) ---
@@ -319,6 +376,7 @@ export function formatUpdateFixReport(
             updatedPackages: result.updatedPackages,
             dedupedEntries: result.dedupedEntries,
             dedupedPackages: result.dedupedPackages,
+            prunedEntries: result.prunedEntries,
             ...buildSkippedUpdateSummary(result.skippedUpdates),
           }
         : {
@@ -345,6 +403,7 @@ export type UpdateFixSummary =
       updatedPackages: number
       dedupedEntries: number
       dedupedPackages: number
+      prunedEntries: number
       skippedUpdateCount?: number
       skippedPackageCount?: number
       skippedDedupePackageCount?: number
@@ -364,15 +423,37 @@ export function formatUpdateFixSummary(
     return skippedText ? `${base}\n${skippedText.trim()}` : base
   }
 
-  const updatedText =
-    summary.updatedEntries > 0
-      ? `Updated ${plural(summary.updatedEntries, "entry", "entries")} across ${plural(summary.updatedPackages, "intermediate package", "intermediate packages")}`
-      : "No intermediate updates applied"
-  const dedupedText =
-    summary.dedupedEntries > 0
-      ? `deduped ${plural(summary.dedupedEntries, "entry", "entries")} across ${plural(summary.dedupedPackages, "package", "packages")}`
-      : "no dedupe rewrites needed"
+  if (
+    summary.updatedEntries === 0 &&
+    summary.dedupedPackages === 0 &&
+    summary.prunedEntries > 0
+  ) {
+    const base = `Removed ${plural(summary.prunedEntries, "unreachable entry", "unreachable entries")} from ${lockPath}.`
+    return skippedText ? `${base}\n${skippedText.trim()}` : base
+  }
 
-  const base = `${updatedText} and ${dedupedText} in ${lockPath}.`
+  const changes: string[] = []
+  if (summary.updatedEntries > 0) {
+    changes.push(
+      `updated ${plural(summary.updatedEntries, "entry", "entries")} across ${plural(summary.updatedPackages, "intermediate package", "intermediate packages")}`,
+    )
+  }
+  if (summary.dedupedPackages > 0) {
+    changes.push(
+      `deduped ${plural(summary.dedupedEntries, "entry", "entries")} across ${plural(summary.dedupedPackages, "package", "packages")}`,
+    )
+  }
+  if (summary.prunedEntries > 0) {
+    changes.push(
+      `removed ${plural(summary.prunedEntries, "unreachable entry", "unreachable entries")}`,
+    )
+  }
+
+  const [firstChange = "no update fixes applied", ...remainingChanges] = changes
+  const changeText = [
+    `${firstChange.charAt(0).toUpperCase()}${firstChange.slice(1)}`,
+    ...remainingChanges,
+  ].join(" and ")
+  const base = `${changeText} in ${lockPath}.`
   return skippedText ? `${base}\n${skippedText.trim()}` : base
 }

@@ -40,9 +40,11 @@ export type UpdateAndDedupeLockResult = {
   /** Intermediate package entries updated from registry metadata. */
   updatedEntries: number
   updatedPackages: number
-  /** Entries later touched by normal dedupe after updates were applied. */
+  /** Entries later touched by normal dedupe after updates. */
   dedupedEntries: number
   dedupedPackages: number
+  /** Unreachable package entries removed after updates and dedupe. */
+  prunedEntries: number
   /** All update opportunities found before safety filtering. */
   suggestedUpdates: SuggestedUpdate[]
   /** Suggested updates actually written into the lockfile. */
@@ -480,8 +482,9 @@ export async function updateAndDedupeLockText(
     lockText: dedupeResult.changed ? dedupeResult.lockText : afterUpdatesText,
     updatedEntries: updateResult.updatedEntries,
     updatedPackages: updateResult.updatedPackages,
-    dedupedEntries: dedupeResult.touchedEntries,
+    dedupedEntries: dedupeResult.rewrittenEntries,
     dedupedPackages: dedupeResult.rewrittenPackages,
+    prunedEntries: dedupeResult.prunedEntries,
     suggestedUpdates,
     appliedUpdates: updateResult.appliedUpdates,
     skippedUpdates: plan.skippedUpdates,

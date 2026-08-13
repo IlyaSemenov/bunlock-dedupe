@@ -1,0 +1,7 @@
+No fixable duplicate packages found in bun.lock.
+
+2 duplicate packages in bun.lock.
+2 packages cannot be deduped.
+2 unreachable entries can be removed.
+
+Run with --fix to remove unreachable entries.
