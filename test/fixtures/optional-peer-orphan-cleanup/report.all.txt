@@ -1,0 +1,12 @@
+@nuxt/test-utils:
+  ✅ 4.1.0
+    used by:
+      - example: 4.1.0 (overridden to 4.1.0)
+  ⬆️ 4.0.3 → 4.1.0
+    invalid for:
+      - example > vitest-environment-nuxt: ^4.0.0 (overridden to 4.1.0)
+
+1 duplicate package in bun.lock.
+1 package can be deduped.
+
+Run with --fix to apply available dedupes.

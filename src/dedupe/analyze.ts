@@ -2,6 +2,7 @@ import semver from "semver"
 
 import type { BunLockFile, BunPackageMeta } from "./parse"
 import {
+  isOptionalPeerDependency,
   isPackageEntry,
   normalizeDependencyMap,
   packageEntryMeta,
@@ -18,6 +19,7 @@ export type ResolvedPackage = {
   dependencies: BunPackageMeta["dependencies"]
   optionalDependencies: BunPackageMeta["optionalDependencies"]
   peerDependencies: BunPackageMeta["peerDependencies"]
+  optionalPeers: BunPackageMeta["optionalPeers"]
 }
 
 /**
@@ -277,6 +279,37 @@ export function effectiveDependencyRange(
   return overrideRange === undefined ? declaredRange : overrideRange
 }
 
+/**
+ * Decide whether a resolved dependency should form a reachability edge.
+ *
+ * Only a known-incompatible optional peer is absent; required dependencies and
+ * peers with unknown compatibility stay reachable.
+ */
+export function isResolvedDependencyReachable(
+  lock: Pick<BunLockFile, "overrides">,
+  requester: Pick<
+    BunPackageMeta,
+    | "dependencies"
+    | "optionalDependencies"
+    | "peerDependencies"
+    | "optionalPeers"
+  >,
+  dependencyName: string,
+  resolvedVersion: string,
+): boolean {
+  if (!isOptionalPeerDependency(requester, dependencyName)) return true
+
+  const range = requester.peerDependencies?.[dependencyName]
+  if (!range) return true
+
+  return (
+    evaluateRangeCompatibility(
+      effectiveDependencyRange(lock, dependencyName, range),
+      resolvedVersion,
+    ) !== false
+  )
+}
+
 /** Return the declared range unless bun.lock provides an override. */
 export function effectiveRequestRange(request: {
   range: string
@@ -350,6 +383,11 @@ function collectResolvedPackages(
         metadata.optionalDependencies,
       ),
       peerDependencies: normalizeDependencyMap(metadata.peerDependencies),
+      optionalPeers: Array.isArray(metadata.optionalPeers)
+        ? metadata.optionalPeers.filter(
+            (name): name is string => typeof name === "string",
+          )
+        : [],
     })
   }
 
@@ -496,6 +534,19 @@ function collectDependencyGraph(
         packagesByLockKey,
       )
       if (!resolvedNodeId) {
+        continue
+      }
+
+      const resolvedPackage = packagesByLockKey.get(resolvedNodeId)
+      if (
+        resolvedPackage &&
+        !isResolvedDependencyReachable(
+          lock,
+          packageEntry,
+          dependencyName,
+          resolvedPackage.version,
+        )
+      ) {
         continue
       }
 

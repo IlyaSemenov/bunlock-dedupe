@@ -90,6 +90,33 @@ export function normalizeDependencyMap(value: unknown): DependencyMap {
   return normalized
 }
 
+/** True when a peer is optional and is not also installed as a dependency. */
+export function isOptionalPeerDependency(
+  metadata: Pick<
+    BunPackageMeta,
+    "dependencies" | "optionalDependencies" | "optionalPeers"
+  >,
+  dependencyName: string,
+): boolean {
+  if (
+    !Array.isArray(metadata.optionalPeers) ||
+    !metadata.optionalPeers.includes(dependencyName)
+  ) {
+    return false
+  }
+
+  return (
+    !Object.hasOwn(
+      normalizeDependencyMap(metadata.dependencies),
+      dependencyName,
+    ) &&
+    !Object.hasOwn(
+      normalizeDependencyMap(metadata.optionalDependencies),
+      dependencyName,
+    )
+  )
+}
+
 /**
  * Splits Bun's resolved package spec (`name@version`) using the last `@`, so
  * scoped package names such as `@scope/name@1.0.0` are handled correctly.

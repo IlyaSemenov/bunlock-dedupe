@@ -1,0 +1,35 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "devDependencies": {
+        "@nuxt/test-utils": "4.1.0",
+        "vitest-environment-nuxt": "2.0.0",
+      },
+    },
+  },
+  "overrides": {
+    "@nuxt/test-utils": "4.1.0",
+  },
+  "packages": {
+    "@nuxt/test-utils": ["@nuxt/test-utils@4.1.0", "", { "peerDependencies": { "compatible-peer": "^1.0.0", "h3-next": ">=2.0.1-rc.22", "unknown-peer": "workspace:*" }, "optionalPeers": ["compatible-peer", "h3-next", "unknown-peer"] }, "sha-new"],
+
+    "compatible-peer": ["compatible-peer@1.1.0", "", { "dependencies": { "compatible-leaf": "1.0.0" } }, "sha-compatible"],
+
+    "compatible-leaf": ["compatible-leaf@1.0.0", "", {}, "sha-compatible-leaf"],
+
+    "vitest-environment-nuxt": ["vitest-environment-nuxt@2.0.0", "", { "dependencies": { "@nuxt/test-utils": "^4.0.0" } }, "sha-parent"],
+
+    "vitest-environment-nuxt/@nuxt/test-utils": ["@nuxt/test-utils@4.0.3", "", { "dependencies": { "h3-next": "npm:h3@2.0.1-rc.20" } }, "sha-old"],
+
+    "h3-next": ["h3@2.0.1-rc.20", "", { "dependencies": { "rou3": "^0.7.3" } }, "sha-h3"],
+
+    "h3-next/rou3": ["rou3@0.7.3", "", {}, "sha-rou3"],
+
+    "unknown-peer": ["unknown-peer@1.0.0", "", { "dependencies": { "unknown-leaf": "1.0.0" } }, "sha-unknown"],
+
+    "unknown-leaf": ["unknown-leaf@1.0.0", "", {}, "sha-unknown-leaf"],
+  },
+}

@@ -2,6 +2,7 @@ import {
   analyzeDuplicatePackages,
   type DuplicatePackageInfo,
   isNestedDependencyLockKey,
+  isResolvedDependencyReachable,
 } from "./analyze"
 import {
   type BunLockFile,
@@ -24,7 +25,7 @@ export type DedupeLockResult = {
   lockText: string
   /** Number of package entries rewritten or removed across all passes. */
   touchedEntries: number
-  /** Number of distinct package names affected by the rewrite. */
+  /** Number of distinct package names directly rewritten for deduplication. */
   rewrittenPackages: number
 }
 
@@ -153,7 +154,47 @@ function entryDependencyNames(entry: BunPackageEntry): string[] {
   })
 }
 
+/**
+ * Resolve one dependency edge for pruning.
+ *
+ * Optional peers with a known-incompatible selected version behave as absent;
+ * unknown ranges stay reachable so pruning remains conservative.
+ */
+function resolveEntryDependencyLockKey(
+  lock: BunLockFile,
+  packages: Record<string, BunPackageEntry>,
+  entry: BunPackageEntry,
+  requesterLockKey: string,
+  dependencyName: string,
+  excludedKey: string,
+): string | undefined {
+  const resolvedKey = resolveFallbackLockKey(
+    packages,
+    requesterLockKey,
+    dependencyName,
+    excludedKey,
+  )
+  if (!resolvedKey) return undefined
+
+  const metadata = packageEntryMeta(entry)
+  const resolvedEntry = packages[resolvedKey]
+  if (!metadata || !isPackageEntry(resolvedEntry)) return resolvedKey
+
+  const resolved = parseResolvedSpec(resolvedEntry[0])
+  if (!resolved) return resolvedKey
+
+  return isResolvedDependencyReachable(
+    lock,
+    metadata,
+    dependencyName,
+    resolved.version,
+  )
+    ? resolvedKey
+    : undefined
+}
+
 function resolvesSameDependencies(
+  lock: BunLockFile,
   packages: Record<string, BunPackageEntry>,
   entry: BunPackageEntry,
   nestedKey: string,
@@ -161,8 +202,22 @@ function resolvesSameDependencies(
 ): boolean {
   return entryDependencyNames(entry).every(
     (depName) =>
-      resolveFallbackLockKey(packages, nestedKey, depName, "") ===
-      resolveFallbackLockKey(packages, fallbackKey, depName, ""),
+      resolveEntryDependencyLockKey(
+        lock,
+        packages,
+        entry,
+        nestedKey,
+        depName,
+        "",
+      ) ===
+      resolveEntryDependencyLockKey(
+        lock,
+        packages,
+        entry,
+        fallbackKey,
+        depName,
+        "",
+      ),
   )
 }
 
@@ -187,10 +242,10 @@ function clonePackageEntry(
  * resolve every dependency of the entry to the same lock key.
  */
 function pruneRedundantNestedEntries(
+  lock: BunLockFile,
   packages: Record<string, BunPackageEntry>,
-): { prunedEntries: number; prunedPackageNames: Set<string> } {
+): number {
   let prunedEntries = 0
-  const prunedPackageNames = new Set<string>()
   let changed = true
 
   while (changed) {
@@ -222,18 +277,19 @@ function pruneRedundantNestedEntries(
       const fallbackEntry = packages[fallbackKey]
       if (!isPackageEntry(fallbackEntry)) continue
       if (JSON.stringify(fallbackEntry) !== JSON.stringify(entry)) continue
-      if (!resolvesSameDependencies(packages, entry, lockKey, fallbackKey)) {
+      if (
+        !resolvesSameDependencies(lock, packages, entry, lockKey, fallbackKey)
+      ) {
         continue
       }
 
       delete packages[lockKey]
       prunedEntries += 1
-      prunedPackageNames.add(parsed.name)
       changed = true
     }
   }
 
-  return { prunedEntries, prunedPackageNames }
+  return prunedEntries
 }
 
 function collectWorkspacePackageKeys(lock: BunLockFile): Set<string> {
@@ -258,7 +314,7 @@ function collectWorkspacePackageKeys(lock: BunLockFile): Set<string> {
 function pruneUnreachableEntries(
   lock: BunLockFile,
   packages: Record<string, BunPackageEntry>,
-): { prunedEntries: number; prunedPackageNames: Set<string> } {
+): number {
   const reachable = new Set<string>()
   const queue: string[] = []
   const workspacePackageKeys = collectWorkspacePackageKeys(lock)
@@ -300,26 +356,29 @@ function pruneUnreachableEntries(
     if (!isPackageEntry(entry)) continue
 
     for (const dependencyName of entryDependencyNames(entry)) {
-      enqueue(resolveFallbackLockKey(packages, lockKey, dependencyName, ""))
+      enqueue(
+        resolveEntryDependencyLockKey(
+          lock,
+          packages,
+          entry,
+          lockKey,
+          dependencyName,
+          "",
+        ),
+      )
     }
   }
 
   let prunedEntries = 0
-  const prunedPackageNames = new Set<string>()
 
-  for (const [lockKey, entry] of Object.entries(packages)) {
+  for (const lockKey of Object.keys(packages)) {
     if (reachable.has(lockKey) || workspacePackageKeys.has(lockKey)) continue
-
-    if (isPackageEntry(entry)) {
-      const parsed = parseResolvedSpec(entry[0])
-      if (parsed) prunedPackageNames.add(parsed.name)
-    }
 
     delete packages[lockKey]
     prunedEntries += 1
   }
 
-  return { prunedEntries, prunedPackageNames }
+  return prunedEntries
 }
 
 /**
@@ -384,17 +443,8 @@ function rewriteEntries(
   }
 
   if (touchedEntries > 0) {
-    const pruneResult = pruneRedundantNestedEntries(packages)
-    touchedEntries += pruneResult.prunedEntries
-    for (const name of pruneResult.prunedPackageNames) {
-      touchedPackageNames.add(name)
-    }
-
-    const unreachablePruneResult = pruneUnreachableEntries(lock, packages)
-    touchedEntries += unreachablePruneResult.prunedEntries
-    for (const name of unreachablePruneResult.prunedPackageNames) {
-      touchedPackageNames.add(name)
-    }
+    touchedEntries += pruneRedundantNestedEntries(lock, packages)
+    touchedEntries += pruneUnreachableEntries(lock, packages)
   }
 
   return {
