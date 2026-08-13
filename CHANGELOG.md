@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.8.1
+
+### Patch Changes
+
+- d5e94d6: `--fix` now removes transitive package entries that become unreachable after deduplication when an optional peer cannot accept their version.
+
 ## 1.8.0
 
 ### Minor Changes
