@@ -1,5 +1,12 @@
 # bunlock-dedupe
 
+## 1.8.2
+
+### Patch Changes
+
+- bba7b1e: `--fix` now removes unreachable optional-peer package entries even when the lockfile was already deduplicated by an earlier run.
+  Reports now show when unreachable entries can be or were removed.
+
 ## 1.8.1
 
 ### Patch Changes
