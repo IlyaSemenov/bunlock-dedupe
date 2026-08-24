@@ -8,6 +8,7 @@ import {
 import { effectiveDependencyRange, resolveDependencyLockKey } from "./analyze"
 import type { BunLockFile, BunPackageEntry, BunPackageMeta } from "./parse"
 import {
+  isGitPackageEntry,
   isPackageEntry,
   normalizeDependencyMap,
   parseBunLock,
@@ -247,7 +248,7 @@ async function assessSuggestedUpdates(
       continue
     }
 
-    const [, resolved] = entry
+    const resolved = isGitPackageEntry(entry) ? undefined : entry[1]
     const nextIntegrity = meta.dist?.integrity
     if (!nextIntegrity) {
       skippedUpdates.push({ ...update, skipReason: "no-integrity" })

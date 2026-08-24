@@ -1,0 +1,38 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "example",
+      "dependencies": {
+        "html2pdf.js": "github:hakimio/html2pdf.js#642df96"
+      }
+    }
+  },
+  "packages": {
+    "css-line-break": ["css-line-break@1.0.1", "", {}, "sha-css-line-break"],
+    "html2canvas": [
+      "html2canvas@github:hakimio/html2canvas#258fdea",
+      { "dependencies": { "css-line-break": "1.0.1" } },
+      "hakimio-html2canvas-258fdea",
+      "sha-html2canvas"
+    ],
+    "html2pdf.js": [
+      "html2pdf.js@github:hakimio/html2pdf.js#642df96",
+      {
+        "dependencies": {
+          "html2canvas": "hakimio/html2canvas#fix-package-json",
+          "jspdf": "hakimio/jspdf#custom-build"
+        }
+      },
+      "hakimio-html2pdf.js-642df96",
+      "sha-html2pdf"
+    ],
+    "jspdf": [
+      "jspdf@github:hakimio/jspdf#custom-build",
+      {},
+      "hakimio-jspdf-custom-build",
+      "sha-jspdf"
+    ]
+  }
+}

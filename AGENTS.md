@@ -35,6 +35,7 @@ Treat README.md as the user-facing behavior contract.
 - Preserve package key order during rendering.
 - Sort dependency maps created from registry metadata by package name before rendering.
 - Do not copy context-specific package tuple metadata such as `bundled` when reusing an entry as a rewrite template.
+- Read package tuple metadata from the object slot and preserve its position: registry packages store it third, while git packages store it second.
 
 ## Fixtures
 

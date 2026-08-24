@@ -15,7 +15,7 @@ export type BunLockWorkspace = {
 }
 
 /**
- * Metadata stored as the third item of a Bun package tuple.
+ * Metadata stored in a Bun package tuple.
  *
  * `bundled` is context-specific in Bun lockfiles: it belongs to entries under
  * the package that bundles them and must not be blindly copied to another
@@ -35,20 +35,31 @@ export type BunPackageMeta = {
 }
 
 /**
- * Bun lockfile package tuple:
- * `[name@version, resolved, metadata, integrity]`.
+ * Bun lockfile package tuple.
  *
- * Bun omits trailing values freely, so every item after the package spec is
- * optional even when most registry entries include all four positions.
+ * Registry packages use `[spec, resolved, metadata, integrity]`, while git
+ * packages use `[spec, metadata, resolved, integrity]`. Bun omits trailing
+ * values freely in either form.
  */
-export type BunPackageEntry = [
+export type BunRegistryPackageEntry = [
   /** Resolved package spec in `name@version` form. */
   spec: string,
-  /** Optional tuple slot; registry packages commonly use an empty string here. */
+  /** Optional resolved source; registry packages commonly use an empty string. */
   resolved?: string,
   meta?: BunPackageMeta,
   integrity?: string,
 ]
+
+export type BunGitPackageEntry = [
+  /** Resolved git package spec in `name@source` form. */
+  spec: string,
+  meta: BunPackageMeta,
+  /** Optional resolved git cache identifier. */
+  resolved?: string,
+  integrity?: string,
+]
+
+export type BunPackageEntry = BunRegistryPackageEntry | BunGitPackageEntry
 
 /** Parsed shape used by this tool; Bun may preserve additional top-level keys. */
 export type BunLockFile = {
@@ -68,11 +79,19 @@ export function isPackageEntry(value: unknown): value is BunPackageEntry {
   return Array.isArray(value) && typeof value[0] === "string"
 }
 
+export function isGitPackageEntry(
+  entry: BunPackageEntry,
+): entry is BunGitPackageEntry {
+  return isObject(entry[1])
+}
+
 export function packageEntryMeta(
   entry: BunPackageEntry,
 ): BunPackageMeta | undefined {
-  const meta = entry[2]
-  return isObject(meta) ? (meta as BunPackageMeta) : undefined
+  if (isGitPackageEntry(entry)) return entry[1]
+
+  const maybeMeta = entry[2]
+  return isObject(maybeMeta) ? maybeMeta : undefined
 }
 
 export function normalizeDependencyMap(value: unknown): DependencyMap {

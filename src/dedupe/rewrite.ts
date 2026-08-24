@@ -7,6 +7,7 @@ import {
 import {
   type BunLockFile,
   type BunPackageEntry,
+  isGitPackageEntry,
   isPackageEntry,
   normalizeDependencyMap,
   packageEntryMeta,
@@ -229,13 +230,21 @@ function clonePackageEntry(
   entry: BunPackageEntry,
   options?: { stripBundled?: boolean },
 ): BunPackageEntry {
-  const [spec, resolved, meta, integrity] = entry
-  const clonedMeta = meta !== undefined ? { ...meta } : undefined
-  if (options?.stripBundled && clonedMeta?.bundled === true) {
+  const meta = packageEntryMeta(entry)
+  if (!meta) return [...entry] as BunPackageEntry
+
+  const clonedMeta = { ...meta }
+  if (options?.stripBundled && clonedMeta.bundled === true) {
     delete clonedMeta.bundled
   }
 
-  return [spec, resolved, clonedMeta, integrity] as BunPackageEntry
+  if (isGitPackageEntry(entry)) {
+    const [spec, , resolved, integrity] = entry
+    return [spec, clonedMeta, resolved, integrity]
+  }
+
+  const [spec, resolved, , integrity] = entry
+  return [spec, resolved, clonedMeta, integrity]
 }
 
 /**
