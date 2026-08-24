@@ -1,5 +1,11 @@
 # bunlock-dedupe
 
+## 1.8.3
+
+### Patch Changes
+
+- 30bc5ec: Preserve transitive dependencies of git-sourced packages when removing unreachable `bun.lock` entries.
+
 ## 1.8.2
 
 ### Patch Changes
