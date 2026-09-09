@@ -1,23 +1,30 @@
-# bunlock-dedupe
+# bunlock-dedupe Agent Guide
 
-CLI that dedupes and updates `bun.lock` entries.
-Treat README.md as the user-facing behavior contract.
+## Overview
 
-## Commands
+CLI that analyzes, deduplicates, and updates dependencies in `bun.lock` files.
 
-- Run tests with `bun test` and typecheck with `bun run types`.
-- `bun run lint` and `bun run check` invoke Biome with auto-fixes; treat both as mutating commands.
+Read [README.md](README.md) completely before changing CLI behavior, supported runtimes, output, or user documentation.
 
-## Code map
+Extend this guide only with stable, non-obvious conventions, architecture, contracts, workflows, and gotchas.
+Do not catalog files or restate information evident from their names and locations.
 
-- `src/cli.ts`, `src/read-bun-lock.ts` — CLI flow and lockfile discovery.
-- `src/dedupe/parse.ts` — parsed lockfile types, package tuple metadata, and resolved-spec parsing.
-- `src/dedupe/analyze.ts` — duplicate analysis, dependency graph, shared lock-key resolver.
-- `src/dedupe/rewrite.ts` — dedupe rewrites, pruning, lockfile rendering.
-- `src/dedupe/update-analyze.ts` — registry-backed update suggestions.
-- `src/dedupe/update-fix.ts` — safety classification and application of updates for `--update --fix`.
-- `src/dedupe/format.ts`, `src/cli-messages.ts` — detailed report and summary rendering.
-- `src/registry.ts`, `src/registry-cache.ts` — registry, persistent HTTP cache, and local Bun-cache metadata access.
+## Scope
+
+- Keep production code in `src/`.
+- Use `src/*.test.ts` for focused tests of one source module.
+- Keep fixture-driven integration cases in `test/fixtures/`.
+- Keep `src/index.ts` limited to explicit public exports.
+- Treat `package.json` exports, supported runtimes, CLI flags, and documented output as public contracts.
+
+## Architecture
+
+- Keep lockfile parsing and package tuple interpretation in `src/dedupe/parse.ts`.
+- Keep duplicate analysis, dependency graph construction, and normal lock-key lookup in `src/dedupe/analyze.ts`.
+- Keep dedupe rewrites, unreachable-entry pruning, and lockfile rendering in `src/dedupe/rewrite.ts`.
+- Keep registry-backed update suggestions separate from update safety classification and application.
+- Keep detailed report rendering separate from CLI orchestration and summary rendering.
+- Keep registry access, persistent HTTP caching, and local Bun-cache metadata access behind their existing modules.
 
 ## Lockfile invariants
 
@@ -30,19 +37,40 @@ Treat README.md as the user-facing behavior contract.
 - Dedupe rewrites operate per package version, not per lock entry: a version is rewritten only when every inbound request accepts the target.
 - For a package requester, normal dependency lookup order is exact `requester/dependency`, closest ancestor-provided nested entry, then root `dependency`.
 - For context-free lookup, use the root entry first and accept a nested entry only when it is the unique candidate.
-- Use `resolveDependencyLockKey` from `analyze.ts` for normal lookup; `resolveFallbackLockKey` in `rewrite.ts` is only for simulating lookup with an entry removed and must keep the same ancestor-before-root precedence.
+- Use `resolveDependencyLockKey` from `src/dedupe/analyze.ts` for normal lookup.
+- Use `resolveFallbackLockKey` from `src/dedupe/rewrite.ts` only to simulate lookup with an entry removed, preserving ancestor-before-root precedence.
 - Use lock keys and requester node IDs for identity and safety decisions; use `requestPath` only for display.
 - Preserve package key order during rendering.
 - Sort dependency maps created from registry metadata by package name before rendering.
 - Do not copy context-specific package tuple metadata such as `bundled` when reusing an entry as a rewrite template.
 - Read package tuple metadata from the object slot and preserve its position: registry packages store it third, while git packages store it second.
 
-## Fixtures
+## Documentation
 
-- `test/fixtures/<name>/` directories are auto-discovered by `test/fixtures.test.ts`.
+- Write README and CLI text for users who do not know the implementation.
+- Keep README content limited to CLI flags, workflow, and how to read the report.
+- Add JSDoc to every exported declaration and to internal helpers whose contract, inputs, output, or failure behavior is not obvious.
+- Add inline comments beside every non-obvious invariant, algorithmic choice, safety constraint, and intentionally limited behavior.
+- Update nearby JSDoc and inline comments whenever the documented code changes, and remove comments that no longer apply.
+- Do not narrate self-evident syntax or restate what a name already communicates.
+- Do not document obvious or implied defaults.
+- Describe a default only when readers need it to make a decision or avoid surprising behavior.
+- Use One Sentence Per Line for connected prose.
+- Keep semantically connected explanations as prose paragraphs.
+- Use lists for separate assertions instead of presenting them as prose paragraphs.
+
+## Tests
+
 - Prefer a fixture for user-visible report or rewrite regressions; use a unit test only when the behavior is an isolated algorithm that the fixture pipeline does not expose clearly.
-- Generate expected files by running the real pipeline and reviewing its output; do not hand-write them.
-- When a behavior change trivializes a fixture's output, adapt the fixture so its named scenario stays observable; do not just rewrite the expected report.
+- Treat `test/fixtures/<name>/` directories as auto-discovered by `test/fixtures.test.ts`.
+- Generate expected fixture files by running the real pipeline and reviewing its output; do not hand-write them.
+- When a behavior change trivializes a fixture's output, adapt the fixture so its named scenario stays observable instead of only rewriting the expected report.
+- Add a `describe` block where the file gives a reason for it: several APIs or behaviors in one file, or a fixture that belongs to some cases but not all.
+- Name such a block after what it covers and keep its fixtures inside it.
+- Distinguish several same-kind values by role rather than by order.
+- When values differ only by order, number them with digits instead of ordinal words.
+- Keep tests deterministic so a failure repeats on every run.
+- Generate random inputs from an explicit seed and print the seed in failure messages so the failing input can be replayed.
 
 ## Reproductions
 
@@ -50,10 +78,28 @@ Treat README.md as the user-facing behavior contract.
 - Save large CLI reports to a temporary file and extract only the relevant package block for inspection.
 - In a `used by` line, the path ends at the requester, the group heading names the requested package, and the suffix is the requester's declared range.
 
-## Changesets and README
+## Changesets
 
-- Add a `.changeset/*.md` entry only for user-visible changes; do not add one for internal refactors, maintenance, or tests.
-- Write one or two sentences as release notes for CLI users, describing the changed behavior or what users can now observe or do, without implementation details or rationale.
-- Never edit `CHANGELOG.md` by hand; it is generated from changesets.
-- README documents only what a CLI user needs: flags, workflow, and how to read the report.
-- Keep README additions brief and leave internal mechanics to code comments or this file.
+- Add one `.changeset/*.md` file for each independently releasable user-visible change.
+- Do not add changesets for internal refactors, maintenance, tests, or documentation changes that do not require a package release.
+- Choose the SemVer bump from the public contract: `patch` for backward-compatible fixes, `minor` for backward-compatible functionality, and `major` for breaking changes.
+- Create `.changeset/<unique-name>.md` with this format:
+
+```markdown
+---
+"bunlock-dedupe": patch
+---
+
+Describe the user-visible change.
+```
+
+- Write one or two concise sentences for CLI users describing the observable change or new capability.
+  Avoid implementation details and rationale.
+- Do not edit the package version or `CHANGELOG.md` by hand, and do not run `changeset version` or `changeset publish`; the release workflow consumes pending changesets.
+
+## Checks
+
+- Run `bun run types` when public types, shared interfaces, or TypeScript configuration change.
+- Run `bun test` when behavior changes.
+- Run `bun run build` when package exports, declarations, or supported runtimes change.
+- Treat `bun run lint` and `bun run check` as mutating commands because they invoke Biome with auto-fixes.
