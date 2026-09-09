@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import {
   existsSync,
   mkdirSync,
@@ -27,13 +27,20 @@ type FetchFn = (
 ) => Promise<Response>
 
 const temporaryCacheDirs: string[] = []
+const originalCacheEnv = process.env.BUNLOCK_DEDUPE_CACHE
 const initialPackument: TestPackument = {
   versions: {
     "1.0.0": {},
   },
 }
 
+beforeEach(() => {
+  delete process.env.BUNLOCK_DEDUPE_CACHE
+})
+
 afterEach(() => {
+  if (originalCacheEnv === undefined) delete process.env.BUNLOCK_DEDUPE_CACHE
+  else process.env.BUNLOCK_DEDUPE_CACHE = originalCacheEnv
   for (const cacheDir of temporaryCacheDirs.splice(0)) {
     rmSync(cacheDir, { recursive: true, force: true })
   }
@@ -63,7 +70,32 @@ function openCache(cacheDir: string, now: number, packageName = "pkg") {
 }
 
 describe("persistent registry cache", () => {
+  test.each([
+    ["1800", 1_800_000],
+    ["0", 0],
+    ["", 300_000],
+    ["invalid", 300_000],
+    ["-1", 300_000],
+    ["1.5", 300_000],
+    ["Infinity", 300_000],
+    ["9007199254740991", 300_000],
+  ] as const)("BUNLOCK_DEDUPE_CACHE=%j sets freshness to %i ms", async (value, freshness) => {
+    process.env.BUNLOCK_DEDUPE_CACHE = value
+    const cacheDir = makeCacheDir()
+    const checkedAt = 1_000_000
+    const initial = await openCache(cacheDir, checkedAt)
+    await initial.store(initialPackument, new Response(null))
+
+    if (freshness > 0) {
+      expect((await openCache(cacheDir, checkedAt + freshness - 1)).fresh).toBe(
+        true,
+      )
+    }
+    expect((await openCache(cacheDir, checkedAt + freshness)).fresh).toBe(false)
+  })
+
   test("reuses fresh data and lets --refresh revalidate it", async () => {
+    process.env.BUNLOCK_DEDUPE_CACHE = "1800"
     const registryCacheDir = makeCacheDir()
     let calls = 0
     const conditionalEtags: Array<string | null> = []
@@ -100,14 +132,14 @@ describe("persistent registry cache", () => {
       ranges: ["^1.0.0"],
       fetchFn,
       registryCacheDir,
-      nowFn: () => 1_000_001,
+      nowFn: () => 1_000_000 + 10 * 60 * 1000,
     })
     const refreshed = await fetchCompatibleVersions("pkg", {
       ranges: ["^1.0.0"],
       fetchFn,
       registryCacheDir,
       refresh: true,
-      nowFn: () => 1_000_002,
+      nowFn: () => 1_000_000 + 10 * 60 * 1000 + 1,
     })
 
     expect(refreshed).toEqual(["1.1.0", "1.0.0"])
@@ -183,16 +215,26 @@ describe("persistent registry cache", () => {
     expect(freshAgain.entry?.data).toEqual(initialPackument)
   })
 
-  test("keeps missing-package data fresh for only one minute", async () => {
+  test.each([
+    ["1800", 60_000],
+    ["30", 30_000],
+    ["0", 0],
+  ] as const)("BUNLOCK_DEDUPE_CACHE=%s caps missing-package freshness at %i ms", async (value, freshness) => {
+    process.env.BUNLOCK_DEDUPE_CACHE = value
     const cacheDir = makeCacheDir()
     const initial = await openCache(cacheDir, 1_000_000, "missing")
     await initial.store(null, new Response(null, { status: 404 }))
 
-    const fresh = await openCache(cacheDir, 1_000_000 + 59_999, "missing")
-    const stale = await openCache(cacheDir, 1_000_000 + 60_000, "missing")
-
-    expect(fresh.fresh).toBe(true)
-    expect(fresh.entry?.data).toBeNull()
+    if (freshness > 0) {
+      const fresh = await openCache(
+        cacheDir,
+        1_000_000 + freshness - 1,
+        "missing",
+      )
+      expect(fresh.fresh).toBe(true)
+      expect(fresh.entry?.data).toBeNull()
+    }
+    const stale = await openCache(cacheDir, 1_000_000 + freshness, "missing")
     expect(stale.fresh).toBe(false)
   })
 

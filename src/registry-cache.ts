@@ -14,7 +14,7 @@ import { dirname, join } from "node:path"
 import envPaths from "env-paths"
 
 const CACHE_VERSION = 1
-const DATA_FRESHNESS_MS = 5 * 60 * 1000
+const DEFAULT_DATA_FRESHNESS_MS = 5 * 60 * 1000
 const MISSING_DATA_FRESHNESS_MS = 60 * 1000
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000
 const ENTRY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
@@ -176,10 +176,27 @@ function cleanCache(cacheDir: string, now: number): Promise<void> {
   return cleanup
 }
 
+/** Read the TTL in seconds; invalid settings keep the default cache behavior. */
+function dataFreshnessMs(): number {
+  const value = process.env.BUNLOCK_DEDUPE_CACHE?.trim()
+  const seconds = Number(value)
+  const milliseconds = seconds * 1000
+  return value &&
+    Number.isSafeInteger(seconds) &&
+    seconds >= 0 &&
+    Number.isSafeInteger(milliseconds)
+    ? milliseconds
+    : DEFAULT_DATA_FRESHNESS_MS
+}
+
 function isFresh<T>(entry: CacheEntry<T>, now: number): boolean {
   const age = now - entry.checkedAt
+  const dataFreshness = dataFreshnessMs()
+  // A long positive-cache TTL must not hide newly published packages behind a 404.
   const freshness =
-    entry.data === null ? MISSING_DATA_FRESHNESS_MS : DATA_FRESHNESS_MS
+    entry.data === null
+      ? Math.min(MISSING_DATA_FRESHNESS_MS, dataFreshness)
+      : dataFreshness
   return age >= 0 && age < freshness
 }
 

@@ -170,8 +170,9 @@ If restored ranges conflict with locked versions, the report lists them for you 
 ## Registry cache
 
 The persistent cache is created when `--repair` or `--update` runs.
-Registry responses are cached for five minutes in the system cache directory and revalidated afterward.
+Registry responses are cached for 5 minutes in the system cache directory and revalidated afterward.
 Use `--refresh` to revalidate them immediately.
+Set `BUNLOCK_DEDUPE_CACHE` to a non-negative integer in seconds to override.
 
 Cache locations are:
 
