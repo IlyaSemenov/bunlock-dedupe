@@ -16,6 +16,8 @@ bunx bunlock-dedupe --update            # find updates that unlock deduplication
 bunx bunlock-dedupe --update --fix      # apply those updates and dedupe
 bunx bunlock-dedupe --update --refresh  # revalidate cached registry data
 bunx bunlock-dedupe --update --offline  # analyze using only the local bun cache
+bunx bunlock-dedupe --repair            # find lost dependency ranges
+bunx bunlock-dedupe --repair --fix      # restore published dependency metadata
 ```
 
 Or pass a path to a lockfile or project directory:
@@ -40,6 +42,10 @@ This extra rewrite is expected for now; see GitHub issue [Match Bun canonical ke
 **`--update`** — scans for intermediate dependencies that block deduplication and checks the npm registry for newer compatible versions that would unlock it.
 Use `--update --fix` to apply suggested lockfile updates and dedupe the unlocked entries.
 Use `--offline` to analyze only the local bun cache instead of the registry. `--offline --fix` is intentionally rejected because Bun's package cache does not include registry integrity metadata needed to safely write updated lockfile entries.
+
+**`--repair`** — checks the locked package versions against the npm registry and shows dependency metadata that can be restored.
+Use `--repair --fix` to write the repairs.
+Repair runs separately from deduplication and updates; it cannot be combined with `--all`, `--update`, or `--offline`.
 
 ## Output explained
 
@@ -147,9 +153,23 @@ shared-dep:
 
 An update is only suggested when it would actually remove a duplicate version: if another package keeps that version pinned and has no usable update of its own, no update is offered.
 
+## Repairing lost dependency metadata
+
+A lockfile may record an exact version such as `1.2.3` where a dependency actually accepts a range like `^1.2.0`, blocking deduplication or updates.
+For example, this can happen when migrating from pnpm.
+
+```bash
+bunlock-dedupe --repair
+bunlock-dedupe --repair --fix
+```
+
+Repair restores dependency ranges and optional peers from the npm registry without changing package versions.
+It skips patched packages, entries it cannot verify, and repairs requiring dependencies missing from the lockfile.
+If restored ranges conflict with locked versions, the report lists them for you to resolve separately.
+
 ## Registry cache
 
-The persistent cache is created only when `--update` runs without `--offline`.
+The persistent cache is created when `--repair` or `--update` runs.
 Registry responses are cached for five minutes in the system cache directory and revalidated afterward.
 Use `--refresh` to revalidate them immediately.
 

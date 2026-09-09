@@ -18,6 +18,8 @@ export type PackageMetadata = {
   optionalPeers?: string[]
   dist?: {
     integrity?: string
+    /** SHA-1 archive hash used by older lockfile entries. */
+    shasum?: string
   }
 }
 

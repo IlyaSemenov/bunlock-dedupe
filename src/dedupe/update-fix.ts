@@ -1,21 +1,25 @@
 import semver from "semver"
 
 import {
-  createPackumentCache,
-  fetchPackageMetadata,
-  type PackageMetadata,
-} from "../registry"
-import { effectiveDependencyRange, resolveDependencyLockKey } from "./analyze"
-import type { BunLockFile, BunPackageEntry, BunPackageMeta } from "./parse"
-import {
+  type BunLockFile,
+  type BunPackageEntry,
+  type BunPackageMeta,
+  effectiveDependencyRange,
   isGitPackageEntry,
   isPackageEntry,
   normalizeDependencyMap,
   parseBunLock,
   parseResolvedSpec,
-} from "./parse"
+  renderBunLock,
+  resolveDependencyLockKey,
+} from "../bunlock"
+import {
+  createPackumentCache,
+  fetchPackageMetadata,
+  type PackageMetadata,
+} from "../registry"
 import type { DedupeLockResult } from "./rewrite"
-import { dedupeLockText, renderBunLock } from "./rewrite"
+import { dedupeLockText } from "./rewrite"
 import {
   analyzeDuplicatePackagesWithUpdates,
   type SuggestedUpdate,

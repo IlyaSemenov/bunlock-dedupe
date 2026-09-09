@@ -12,38 +12,41 @@ Do not catalog files or restate information evident from their names and locatio
 ## Scope
 
 - Keep production code in `src/`.
-- Use `src/*.test.ts` for focused tests of one source module.
+- Keep focused module tests beside their source as `*.test.ts`.
 - Keep fixture-driven integration cases in `test/fixtures/`.
 - Keep `src/index.ts` limited to explicit public exports.
 - Treat `package.json` exports, supported runtimes, CLI flags, and documented output as public contracts.
 
 ## Architecture
 
-- Keep lockfile parsing and package tuple interpretation in `src/dedupe/parse.ts`.
-- Keep duplicate analysis, dependency graph construction, and normal lock-key lookup in `src/dedupe/analyze.ts`.
-- Keep dedupe rewrites, unreachable-entry pruning, and lockfile rendering in `src/dedupe/rewrite.ts`.
-- Keep registry-backed update suggestions separate from update safety classification and application.
-- Keep detailed report rendering separate from CLI orchestration and summary rendering.
-- Keep registry access, persistent HTTP caching, and local Bun-cache metadata access behind their existing modules.
+- Keep shared lockfile operations independent of dedupe, repair, registry access, and CLI I/O.
+- Keep analysis and rewriting independent of report rendering and CLI I/O.
+- Keep update discovery, safety validation, and application as separate responsibilities.
+- Route registry and Bun-cache I/O through shared access interfaces.
 
 ## Lockfile invariants
 
-- Never write a lockfile in which a dependency range resolves to an incompatible version; `--update --fix` must validate the simulated final lockfile and skip offending updates.
+- Read package tuple metadata from the object slot and preserve its position: registry packages store it third, while git packages store it second.
 - Treat top-level `bun.lock` overrides as the effective dependency ranges while preserving declared ranges for display.
 - Treat prerelease compatibility with default semver range semantics; a prerelease satisfies only comparator sets that explicitly opt into a prerelease with the same major, minor, and patch tuple.
 - Treat an optional peer as a reachability edge only when the resolved entry satisfies its effective range; keep unknown non-semver compatibility conservative.
-- Run unreachable-entry pruning even when the current pass performs no dedupe rewrite, so an already-deduplicated lockfile can still be cleaned up.
-- Track dedupe rewrites and unreachable-entry removals separately in result counters and CLI summaries.
-- Dedupe rewrites operate per package version, not per lock entry: a version is rewritten only when every inbound request accepts the target.
 - For a package requester, normal dependency lookup order is exact `requester/dependency`, closest ancestor-provided nested entry, then root `dependency`.
 - For context-free lookup, use the root entry first and accept a nested entry only when it is the unique candidate.
-- Use `resolveDependencyLockKey` from `src/dedupe/analyze.ts` for normal lookup.
-- Use `resolveFallbackLockKey` from `src/dedupe/rewrite.ts` only to simulate lookup with an entry removed, preserving ancestor-before-root precedence.
+- Use one shared resolver for normal dependency lookup.
+- When simulating removal of a nested entry, exclude it from lookup and preserve ancestor-before-root precedence.
 - Use lock keys and requester node IDs for identity and safety decisions; use `requestPath` only for display.
+- Dedupe rewrites operate per package version, not per lock entry: a version is rewritten only when every inbound request accepts the target.
+- For dedupe and version updates, never write a lockfile in which a dependency range resolves to an incompatible version; `--update --fix` must validate the simulated final lockfile and skip offending updates.
+- Do not copy context-specific package tuple metadata such as `bundled` when reusing an entry as a rewrite template.
+- Run unreachable-entry pruning even when the current pass performs no dedupe rewrite, so an already-deduplicated lockfile can still be cleaned up.
+- Track dedupe rewrites and unreachable-entry removals separately in result counters and CLI summaries.
 - Preserve package key order during rendering.
 - Sort dependency maps created from registry metadata by package name before rendering.
-- Do not copy context-specific package tuple metadata such as `bundled` when reusing an entry as a rewrite template.
-- Read package tuple metadata from the object slot and preserve its position: registry packages store it third, while git packages store it second.
+- During repair, restore declarations for the locked versions without changing package versions or performing deduplication.
+- In `--repair` mode, verify published version metadata against the existing archive integrity before restoring dependency maps and optional-peer declarations.
+- Keep patched and non-registry entries unchanged during repair.
+- Skip a package's repair if its restored declarations require a dependency absent from its lockfile context, including non-semver requests; report the missing dependencies in skipped entries.
+- Report incompatible existing resolutions exposed by restored declarations in both preview and fix output.
 
 ## Documentation
 

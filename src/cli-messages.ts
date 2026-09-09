@@ -1,10 +1,10 @@
+import { parseBunLock } from "./bunlock"
 import type { DuplicatePackageInfo } from "./dedupe/analyze"
 import {
   analyzeDuplicatePackages,
   evaluateRequestCompatibility,
 } from "./dedupe/analyze"
 import { formatDuplicatesReport, updateIdentity } from "./dedupe/format"
-import { parseBunLock } from "./dedupe/parse"
 import {
   isSuggestedTarget,
   resolveSuggestedUnlock,

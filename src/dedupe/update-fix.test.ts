@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 
+import { parseBunLock } from "../bunlock"
 import type { PackageMetadata } from "../registry"
 import { analyzeDuplicatePackages } from "./analyze"
-import { parseBunLock } from "./parse"
 import { classifyUpdateSafety, updateAndDedupeLockText } from "./update-fix"
 
 type FetchFn = (

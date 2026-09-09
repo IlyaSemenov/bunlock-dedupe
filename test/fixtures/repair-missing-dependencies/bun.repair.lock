@@ -1,0 +1,27 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "myapp",
+      "dependencies": {
+        "bundler": "1.0.0",
+        "parent": "1.0.0",
+        "peer": "1.0.0",
+        "safe": "1.0.0",
+      },
+    },
+  },
+  "packages": {
+    "bundler": ["bundler@1.0.0", "", { "dependencies": { "shared": "1.0.0" } }, "sha512-bundler"],
+
+    "parent": ["parent@1.0.0", "", { "optionalDependencies": { "promoted": "^1.0.0" } }, "sha512-parent"],
+
+    "peer": ["peer@1.0.0", "", { "peerDependencies": { "missing-peer": "*" }, "optionalPeers": ["missing-peer"] }, "sha512-peer"],
+
+    "safe": ["safe@1.0.0", "", { "dependencies": { "shared": "^1.0.0" } }, "sha512-safe"],
+
+    "shared": ["shared@1.0.0", "", {}, "sha512-shared"],
+
+    "other/non-semver": ["non-semver@1.0.0", "", {}, "sha512-other"],
+  }
+}

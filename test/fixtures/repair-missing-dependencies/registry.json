@@ -1,0 +1,52 @@
+{
+  "versions": {
+    "bundler": ["1.0.0"],
+    "parent": ["1.0.0"],
+    "peer": ["1.0.0"],
+    "safe": ["1.0.0"],
+    "shared": ["1.0.0"],
+    "non-semver": ["1.0.0"]
+  },
+  "metadata": {
+    "bundler": {
+      "1.0.0": {
+        "version": "1.0.0",
+        "dependencies": { "shared": "^1.0.0", "bundled-missing": "^1.0.0" },
+        "bundleDependencies": ["bundled-missing"],
+        "dist": { "integrity": "sha512-bundler" }
+      }
+    },
+    "parent": {
+      "1.0.0": {
+        "version": "1.0.0",
+        "dependencies": {
+          "promoted": "^1.0.0",
+          "non-semver": "npm:shared@^1.0.0"
+        },
+        "peerDependencies": { "promoted": "*" },
+        "peerDependenciesMeta": { "promoted": { "optional": true } },
+        "dist": { "integrity": "sha512-parent" }
+      }
+    },
+    "peer": {
+      "1.0.0": {
+        "version": "1.0.0",
+        "peerDependencies": { "missing-peer": "*" },
+        "dist": { "integrity": "sha512-peer" }
+      }
+    },
+    "safe": {
+      "1.0.0": {
+        "version": "1.0.0",
+        "dependencies": { "shared": "^1.0.0" },
+        "dist": { "integrity": "sha512-safe" }
+      }
+    },
+    "shared": {
+      "1.0.0": { "version": "1.0.0", "dist": { "integrity": "sha512-shared" } }
+    },
+    "non-semver": {
+      "1.0.0": { "version": "1.0.0", "dist": { "integrity": "sha512-other" } }
+    }
+  }
+}

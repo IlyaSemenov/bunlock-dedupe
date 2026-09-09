@@ -2,16 +2,17 @@ import { expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 
+import { parseBunLock } from "../src/bunlock"
 import { formatReport } from "../src/cli-messages"
 import {
   analyzeDuplicatePackages,
   classifyUpdateSafety,
   dedupeLockText,
-  parseBunLock,
   updateAndDedupeLockText,
 } from "../src/dedupe"
 import { analyzeDuplicatePackagesWithUpdates } from "../src/dedupe/update-analyze"
 import type { PackageMetadata } from "../src/registry"
+import { formatRepairReport, repairLockText } from "../src/repair"
 
 const fixturesRoot = path.join(process.cwd(), "test", "fixtures")
 
@@ -79,9 +80,39 @@ for (const { name, dir, files } of allFixtures) {
   const hasUpdate =
     files.includes("registry.json") && files.includes("report.update.txt")
   const hasUpdateFix = hasUpdate && files.includes("bun.update.lock")
+  const hasRepair =
+    files.includes("registry.json") && files.includes("report.repair.txt")
 
   test(`fixture: ${name}`, async () => {
     const lockText = readFileSync(path.join(dir, "bun.lock"), "utf8")
+
+    if (hasRepair) {
+      const fetchFn = makeFixtureFetch(dir)
+      const result = await repairLockText(lockText, { fetchFn })
+      expect(formatRepairReport(result, "bun.lock")).toBe(
+        readFileSync(path.join(dir, "report.repair.txt"), "utf8").trimEnd(),
+      )
+      expect(result.lockText).toBe(
+        readFileSync(path.join(dir, "bun.repair.lock"), "utf8"),
+      )
+      const repeated = await repairLockText(result.lockText, { fetchFn })
+      expect(repeated.changed).toBe(false)
+      expect(repeated.lockText).toBe(result.lockText)
+      const repairedLock = parseBunLock(result.lockText)
+      expect(
+        formatReport(
+          analyzeDuplicatePackages(repairedLock),
+          dedupeLockText(result.lockText),
+          "bun.lock",
+          { includeUnfixable: true },
+        ),
+      ).toBe(
+        readFileSync(
+          path.join(dir, "report.after-repair.txt"),
+          "utf8",
+        ).trimEnd(),
+      )
+    }
 
     if (hasDedupe) {
       const parsedLock = parseBunLock(lockText)

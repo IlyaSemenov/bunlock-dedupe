@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
 
+import { type BunLockFile, parseBunLock } from "../bunlock"
 import {
   analyzeDuplicatePackages,
   evaluateRequestCompatibility,
 } from "./analyze"
-import { type BunLockFile, parseBunLock } from "./parse"
 import { dedupeLockText } from "./rewrite"
 
 test("an unsupported override specifier does not fall back", () => {

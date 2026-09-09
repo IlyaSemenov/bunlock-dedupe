@@ -1,0 +1,6 @@
+No duplicate packages found in bun.lock.
+
+No duplicate packages in bun.lock.
+1 unreachable entry can be removed.
+
+Run with --fix to remove unreachable entries.

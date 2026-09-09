@@ -1,0 +1,11 @@
+vue:
+  ✅ 3.5.41
+  ⬆️ 3.5.21 → 3.5.41
+    invalid for:
+      - myapp > parent: ^3.5.30
+
+1 duplicate package in bun.lock.
+1 package can be deduped.
+1 unreachable entry can be removed.
+
+Run with --fix to apply available dedupes and remove unreachable entries.

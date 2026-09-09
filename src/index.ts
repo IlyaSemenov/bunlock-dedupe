@@ -1,9 +1,9 @@
+export { parseBunLock } from "./bunlock"
 export {
   analyzeDuplicatePackages,
   analyzeDuplicatePackagesWithUpdates,
   dedupeLockText,
   formatDuplicatesReport,
-  parseBunLock,
   RegistryError,
   updateAndDedupeLockText,
 } from "./dedupe"

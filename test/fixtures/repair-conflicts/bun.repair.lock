@@ -1,0 +1,25 @@
+{
+  "lockfileVersion": 1,
+  "overrides": {
+    "overridden": "2.0.0",
+  },
+  "workspaces": {
+    "": {
+      "name": "myapp",
+      "dependencies": {
+        "parent": "1.0.0",
+      },
+    },
+  },
+  "packages": {
+    "parent": ["parent@1.0.0", "", { "peerDependencies": { "optional-missing": "^1.0.0", "typescript": "^5.0.0", "vue": "^3.5.30" }, "optionalDependencies": { "platform-specific": "^1.0.0" }, "dependencies": { "overridden": "^1.0.0" }, "optionalPeers": ["optional-missing", "typescript"] }, "sha512-parent"],
+
+    "parent/vue": ["vue@3.5.21", "", {}, "sha512-old"],
+
+    "vue": ["vue@3.5.41", "", {}, "sha512-new"],
+
+    "typescript": ["typescript@6.0.3", "", {}, "sha512-ts"],
+
+    "overridden": ["overridden@2.0.0", "", {}, "sha512-override"],
+  }
+}

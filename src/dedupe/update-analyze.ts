@@ -1,5 +1,16 @@
 import semver from "semver"
 
+import {
+  type BunLockFile,
+  dependencyOverrideRange,
+  effectiveDependencyRange,
+  evaluateRangeCompatibility,
+  isPackageEntry,
+  normalizeDependencyMap,
+  packageEntryMeta,
+  parseResolvedSpec,
+  resolveDependencyLockKey,
+} from "../bunlock"
 import type { ProgressFn } from "../progress"
 import {
   fetchCompatibleVersions,
@@ -9,20 +20,9 @@ import {
 import type { DuplicatePackageInfo } from "./analyze"
 import {
   analyzeDuplicatePackages,
-  dependencyOverrideRange,
-  effectiveDependencyRange,
   effectiveRequestRange,
-  evaluateRangeCompatibility,
   evaluateRequestCompatibility,
-  resolveDependencyLockKey,
 } from "./analyze"
-import type { BunLockFile } from "./parse"
-import {
-  isPackageEntry,
-  normalizeDependencyMap,
-  packageEntryMeta,
-  parseResolvedSpec,
-} from "./parse"
 
 type VersionUnlock = {
   name: string

@@ -3,6 +3,7 @@
 import { writeFileSync } from "node:fs"
 import { parseArgs } from "node:util"
 
+import { parseBunLock } from "./bunlock"
 import {
   buildFixSummary,
   formatFixSummary,
@@ -14,13 +15,13 @@ import {
   analyzeDuplicatePackagesWithUpdates,
   classifyUpdateSafety,
   dedupeLockText,
-  parseBunLock,
   updateAndDedupeLockText,
 } from "./dedupe"
 import { createProgressRenderer } from "./progress"
 import { readBunLock } from "./read-bun-lock"
 import { createPackumentCache, RegistryError } from "./registry"
 import { clearRegistryCache } from "./registry-cache"
+import { formatRepairReport, repairLockText } from "./repair"
 
 const commandName = "bunlock-dedupe"
 
@@ -29,6 +30,7 @@ function printUsage(): void {
     `${commandName} [path] [--all] [--fix] [--update [--offline|--refresh]]`,
   )
   console.log(`${commandName} --clear-cache`)
+  console.log(`${commandName} [path] --repair [--fix] [--refresh]`)
   console.log("")
   console.log("Analyze duplicate bun.lock sub-dependencies.")
   console.log("Use --all to also show packages that cannot be deduped.")
@@ -39,6 +41,10 @@ function printUsage(): void {
   console.log("Use --update --offline to analyze only the local bun cache.")
   console.log("Use --update --refresh to revalidate cached registry data.")
   console.log("Use --clear-cache to remove all persistent registry data.")
+  console.log("Use --repair to find incorrect dependency metadata.")
+  console.log(
+    "Use --repair --fix to restore it without updating package versions.",
+  )
 }
 
 function fail(message: string): never {
@@ -53,6 +59,7 @@ async function run(): Promise<void> {
     all: boolean
     help: boolean
     update: boolean
+    repair: boolean
     offline: boolean
     refresh: boolean
     clearCache: boolean
@@ -80,6 +87,10 @@ async function run(): Promise<void> {
           default: false,
         },
         update: {
+          type: "boolean",
+          default: false,
+        },
+        repair: {
           type: "boolean",
           default: false,
         },
@@ -120,6 +131,7 @@ async function run(): Promise<void> {
       values.all ||
       values.fix ||
       values.update ||
+      values.repair ||
       values.offline ||
       values.refresh
     ) {
@@ -130,12 +142,16 @@ async function run(): Promise<void> {
     return
   }
 
+  if (values.repair && (values.update || values.all || values.offline)) {
+    fail("--repair cannot be combined with --update, --all, or --offline")
+  }
+
   if (values.offline && !values.update) {
     fail("--offline is only valid with --update")
   }
 
-  if (values.refresh && !values.update) {
-    fail("--refresh is only valid with --update")
+  if (values.refresh && !values.update && !values.repair) {
+    fail("--refresh is only valid with --update or --repair")
   }
 
   if (values.refresh && values.offline) {
@@ -150,6 +166,24 @@ async function run(): Promise<void> {
 
   const bunLockPath = positionals[0]
   const { path: lockPath, content: lockText } = readBunLock(bunLockPath)
+
+  if (values.repair) {
+    const progress = createProgressRenderer(process.stderr)
+    try {
+      const result = await repairLockText(lockText, {
+        refresh: values.refresh,
+        onProgress: progress.update,
+      })
+      progress.end()
+      if (values.fix && result.changed)
+        writeFileSync(lockPath, result.lockText, "utf8")
+      console.log(formatRepairReport(result, lockPath, values.fix))
+    } finally {
+      progress.end()
+    }
+    return
+  }
+
   const parsedLock = parseBunLock(lockText)
 
   if (values.update) {

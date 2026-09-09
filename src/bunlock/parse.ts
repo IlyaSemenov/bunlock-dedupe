@@ -68,6 +68,8 @@ export type BunLockFile = {
   workspaces?: Record<string, BunLockWorkspace>
   /** Canonical map Bun writes for package.json overrides and resolutions. */
   overrides?: DependencyMap
+  /** Package specs whose local patches may change their dependency declarations. */
+  patchedDependencies?: Record<string, string>
   packages?: Record<string, BunPackageEntry>
 }
 

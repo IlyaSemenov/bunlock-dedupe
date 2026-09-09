@@ -1,0 +1,14 @@
+vue:
+  ✅ 3.5.41
+    used by:
+      - myapp: 3.5.41
+      - myapp > @vue/server-renderer: 3.5.41
+  ⬆️ 3.5.21 → 3.5.41
+    used by:
+      - myapp > @vueuse/core: ^3.5.0
+      - myapp > @vueuse/core > @vueuse/shared: ^3.5.0
+
+1 duplicate package in bun.lock.
+1 package can be deduped.
+
+Run with --fix to apply available dedupes.

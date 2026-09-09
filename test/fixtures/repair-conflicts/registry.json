@@ -1,0 +1,40 @@
+{
+  "versions": {
+    "parent": ["1.0.0"],
+    "vue": ["3.5.21", "3.5.41"],
+    "typescript": ["6.0.3"],
+    "overridden": ["2.0.0"]
+  },
+  "metadata": {
+    "parent": {
+      "1.0.0": {
+        "version": "1.0.0",
+        "dependencies": { "overridden": "^1.0.0" },
+        "peerDependencies": {
+          "vue": "^3.5.30",
+          "typescript": "^5.0.0",
+          "optional-missing": "^1.0.0"
+        },
+        "peerDependenciesMeta": {
+          "typescript": { "optional": true },
+          "optional-missing": { "optional": true }
+        },
+        "optionalDependencies": { "platform-specific": "^1.0.0" },
+        "dist": { "integrity": "sha512-parent" }
+      }
+    },
+    "vue": {
+      "3.5.21": { "version": "3.5.21", "dist": { "integrity": "sha512-old" } },
+      "3.5.41": { "version": "3.5.41", "dist": { "integrity": "sha512-new" } }
+    },
+    "typescript": {
+      "6.0.3": { "version": "6.0.3", "dist": { "integrity": "sha512-ts" } }
+    },
+    "overridden": {
+      "2.0.0": {
+        "version": "2.0.0",
+        "dist": { "integrity": "sha512-override" }
+      }
+    }
+  }
+}

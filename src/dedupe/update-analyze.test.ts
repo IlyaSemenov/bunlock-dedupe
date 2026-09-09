@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 
+import type { BunLockFile, BunPackageEntry } from "../bunlock"
 import type { PackageMetadata } from "../registry"
 import { formatDuplicatesReport } from "./format"
-import type { BunLockFile, BunPackageEntry } from "./parse"
 import { analyzeDuplicatePackagesWithUpdates } from "./update-analyze"
 
 type FetchFn = (

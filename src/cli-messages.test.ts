@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
+import { parseBunLock } from "./bunlock"
 import {
   buildFixSummary,
   countCannotDedupePackages,
@@ -10,7 +11,7 @@ import {
   type ReportSummary,
 } from "./cli-messages"
 import type { DuplicatePackageInfo, SuggestedUpdate } from "./dedupe"
-import { analyzeDuplicatePackages, parseBunLock } from "./dedupe"
+import { analyzeDuplicatePackages } from "./dedupe"
 
 const lockPath = "/project/bun.lock"
 

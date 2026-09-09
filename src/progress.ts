@@ -1,9 +1,7 @@
 import type { Writable } from "node:stream"
 
-// Only the registry-bound analyze pass reports progress. The phase union and
-// label map let a future network-bound phase emit progress by adding a member
-// here, without rebuilding the rest of the plumbing.
-export type ProgressPhase = "analyze"
+/** Registry-bound phases that report progress to the CLI. */
+export type ProgressPhase = "analyze" | "repair"
 
 export type Progress = {
   phase: ProgressPhase
@@ -22,6 +20,7 @@ const PHASE_LABELS: Record<ProgressPhase, string> = {
   // "Checking" describes what the user actually waits on without implying
   // CPU-bound work that would make a slow request look like a hang.
   analyze: "Checking",
+  repair: "Checking",
 }
 
 export type ProgressRenderer = {

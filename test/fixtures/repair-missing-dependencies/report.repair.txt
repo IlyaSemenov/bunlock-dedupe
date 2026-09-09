@@ -1,0 +1,11 @@
+safe:
+  dependencies.shared: 1.0.0 → ^1.0.0
+
+1 package entry can be repaired in bun.lock.
+
+Skipped entries:
+  - bundler: restored metadata requires missing dependencies (bundled-missing)
+  - parent: restored metadata requires missing dependencies (non-semver, promoted)
+  - peer: restored metadata requires missing dependencies (missing-peer)
+
+Run with --repair --fix to restore dependency metadata.
