@@ -1,5 +1,12 @@
 # bunlock-dedupe
 
+## 1.9.0
+
+### Minor Changes
+
+- cb91584: Add `BUNLOCK_DEDUPE_CACHE` to configure registry cache freshness in seconds.
+- de23840: Add `--repair` to restore dependency ranges and optional peer metadata without changing package versions.
+
 ## 1.8.3
 
 ### Patch Changes
